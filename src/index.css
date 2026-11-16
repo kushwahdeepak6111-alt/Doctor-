@@ -1,0 +1,272 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-navy-primary: #0B2D52;
+  --color-navy-deep: #071A30;
+  --color-blue-clinic: #1C7ED6;
+  --color-blue-hover: #1868B2;
+  --color-blue-soft: #EAF3FC;
+  --color-surface-white: #FFFFFF;
+  --color-surface-mist: #F4F8FC;
+  --color-ink-primary: #10233B;
+  --color-ink-secondary: #5C6F84;
+  --color-border-hairline: #E2EAF2;
+
+  --font-display: "Manrope", "Noto Sans Devanagari", system-ui, sans-serif;
+  --font-sans: "DM Sans", "Noto Sans Devanagari", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: #10233B;
+    background-color: #FFFFFF;
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+
+  body {
+    margin: 0;
+    background-color: #FFFFFF;
+    color: #10233B;
+    overflow-x: hidden;
+  }
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  :focus-visible {
+    outline: 2px solid #1C7ED6;
+    outline-offset: 2px;
+  }
+}
+
+/* Dark Theme Surface, Typography & Border System (Screen only; print stays pure white) */
+@media screen {
+  html.dark,
+  html.dark body {
+    background-color: #061323;
+    color: #E2E8F0;
+    color-scheme: dark;
+  }
+
+  html.dark :focus-visible {
+    outline-color: #60A5FA;
+  }
+
+  /* Primary light surfaces mapped to deep clinical navy layers */
+  html.dark .bg-white {
+    background-color: #0B1F38;
+  }
+
+  html.dark .bg-\[\#F4F8FC\] {
+    background-color: #07172A;
+  }
+
+  html.dark .bg-\[\#F8FBFF\] {
+    background-color: #0F2744;
+  }
+
+  html.dark .bg-\[\#EAF3FC\] {
+    background-color: rgba(28, 126, 214, 0.16);
+  }
+
+  html.dark .bg-slate-50 {
+    background-color: #0F2744;
+  }
+
+  html.dark .bg-slate-100 {
+    background-color: #132C4A;
+  }
+
+  html.dark .hover\:bg-\[\#F4F8FC\]:hover,
+  html.dark .hover\:bg-\[\#F4F8FC\]\/60:hover,
+  html.dark .hover\:bg-\[\#F8FBFF\]:hover,
+  html.dark .hover\:bg-slate-50:hover {
+    background-color: #122E50;
+  }
+
+  html.dark .hover\:bg-\[\#EAF3FC\]:hover {
+    background-color: rgba(28, 126, 214, 0.25);
+  }
+
+  /* Typography contrast */
+  html.dark .text-\[\#10233B\] {
+    color: #E2E8F0;
+  }
+
+  html.dark .text-\[\#10233B\]\/90,
+  html.dark .text-\[\#10233B\]\/85 {
+    color: #CBD5E1;
+  }
+
+  html.dark .text-\[\#0B2D52\] {
+    color: #F1F5F9;
+  }
+
+  html.dark .text-\[\#5C6F84\],
+  html.dark .text-slate-600,
+  html.dark .text-slate-700 {
+    color: #9FB3C8;
+  }
+
+  html.dark .text-\[\#195392\] {
+    color: #93C5FD;
+  }
+
+  html.dark .text-\[\#1C7ED6\] {
+    color: #60A5FA;
+  }
+
+  html.dark .text-\[\#1a0dab\] {
+    color: #7DD3FC;
+  }
+
+  html.dark .text-\[\#4d5156\] {
+    color: #CBD5E1;
+  }
+
+  /* Keep explicit white text on solid navy/blue buttons & dark sections */
+  html.dark .bg-\[\#0B2D52\],
+  html.dark .bg-\[\#082240\],
+  html.dark .bg-\[\#071A30\] {
+    color: #FFFFFF;
+  }
+
+  html.dark button.bg-\[\#0B2D52\]:hover,
+  html.dark a.bg-\[\#0B2D52\]:hover {
+    background-color: #133D6E;
+  }
+
+  /* Crisp dark borders & table dividers */
+  html.dark .border-\[\#E2EAF2\] {
+    border-color: #1E3A5F;
+  }
+
+  html.dark .border-\[\#C5DDF8\] {
+    border-color: #254A75;
+  }
+
+  html.dark .border-\[\#CBD5E1\],
+  html.dark .border-slate-300 {
+    border-color: #2B4C73;
+  }
+
+  html.dark .divide-\[\#E2EAF2\] > :not(:last-child) {
+    border-color: #1E3A5F;
+  }
+
+  /* Semantic status & alert colors */
+  html.dark .bg-amber-50 {
+    background-color: rgba(245, 158, 11, 0.14);
+  }
+  html.dark .border-amber-200,
+  html.dark .border-amber-300 {
+    border-color: rgba(245, 158, 11, 0.35);
+  }
+  html.dark .text-amber-700,
+  html.dark .text-amber-800,
+  html.dark .text-amber-900 {
+    color: #FCD34D;
+  }
+
+  html.dark .bg-rose-50 {
+    background-color: rgba(244, 63, 94, 0.14);
+  }
+  html.dark .border-rose-200,
+  html.dark .border-rose-300 {
+    border-color: rgba(244, 63, 94, 0.35);
+  }
+  html.dark .text-rose-700,
+  html.dark .text-rose-800,
+  html.dark .text-rose-900 {
+    color: #FDA4AF;
+  }
+  html.dark .hover\:bg-rose-50:hover,
+  html.dark .hover\:bg-rose-100:hover {
+    background-color: rgba(244, 63, 94, 0.22);
+  }
+
+  html.dark .bg-emerald-50 {
+    background-color: rgba(16, 185, 129, 0.14);
+  }
+  html.dark .border-emerald-200 {
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  html.dark .text-emerald-600,
+  html.dark .text-emerald-700,
+  html.dark .text-emerald-800 {
+    color: #6EE7B7;
+  }
+
+  /* Form controls & placeholders in dark mode */
+  html.dark input:not([type='checkbox']):not([type='radio']),
+  html.dark select,
+  html.dark textarea {
+    color: #F1F5F9;
+  }
+
+  html.dark input::placeholder,
+  html.dark textarea::placeholder {
+    color: #8BA3BD;
+  }
+
+  html.dark select option {
+    background-color: #0B1F38;
+    color: #F1F5F9;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  header,
+  footer,
+  .no-print,
+  [data-no-print="true"] {
+    display: none !important;
+  }
+
+  body[data-print-modal="true"] #root {
+    display: none !important;
+  }
+
+  body {
+    background: #FFFFFF !important;
+    color: #10233B !important;
+  }
+
+  .print-area {
+    box-shadow: none !important;
+    border: 1px solid #CBD5E1 !important;
+    margin: 0 !important;
+    padding: 16px !important;
+  }
+}

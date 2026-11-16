@@ -1,0 +1,931 @@
+AROGYA CLINIC — ULTIMATE MASTER PROMPT
+
+COMPLETE ADDITIONAL FEATURES IMPLEMENTATION — ALL 6 FEATURES IN ONE PASS
+
+ROLE
+
+Act as a senior full-stack engineer, healthcare SaaS architect, Supabase specialist, security engineer, and premium healthcare product designer.
+
+You are working on my EXISTING Arogya Clinic multi-specialty healthcare website.
+
+Your task is to implement all six additional features described below in the existing application, including their frontend UI, backend functionality, database requirements, permissions, integrations, and testing.
+
+This is a feature-addition project, NOT a redesign or replacement project.
+
+The final result must be genuinely functional, secure, responsive, and integrated with the existing application.
+
+---
+
+1. ABSOLUTE EXISTING PROJECT PRESERVATION RULES
+
+Before implementation, inspect the complete existing application.
+
+Understand:
+
+- Current project architecture and folder structure.
+- Existing homepage, navigation, and design system.
+- Existing React components and routes.
+- Existing Supabase connection.
+- Existing database tables and relationships.
+- Existing authentication and registration.
+- Existing patient portal.
+- Existing doctor workspace.
+- Existing reception/staff dashboard.
+- Existing clinic admin dashboard.
+- Existing appointment booking workflow.
+- Existing doctor schedules and availability.
+- Existing appointment statuses.
+- Existing notifications and integrations.
+- Existing RLS policies and role permissions.
+- Existing document upload functionality.
+- Existing localization and language support.
+
+STRICT PRESERVATION REQUIREMENTS
+
+The following must remain unchanged in behavior:
+
+1. Existing website pages and navigation.
+2. Existing brand identity and polished UI.
+3. Existing colour theme and typography.
+4. Existing patient registration and login.
+5. Existing Supabase configuration.
+6. Existing database tables and relationships.
+7. Existing booking and appointment confirmation logic.
+8. Existing doctor availability and scheduling.
+9. Existing cancellation and rescheduling workflows.
+10. Existing patient, doctor, staff, and admin permissions.
+11. Existing medical document upload functionality.
+12. Existing notification integrations.
+13. Existing environment variables and deployment configuration.
+
+DO NOT:
+
+- Create a replacement application.
+- Replace the existing Supabase backend.
+- Delete existing tables or columns.
+- Rename existing tables or columns.
+- Replace real data with mock data.
+- Replace existing authentication.
+- Weaken RLS policies.
+- Introduce frontend-only access control.
+- Introduce authentication bypasses.
+- Hardcode private credentials.
+- Break existing routes or working components.
+- Change existing appointment business logic merely to make implementation easier.
+
+Use the existing project's architecture and design system.
+
+Take a backup or create a restore point before major implementation whenever supported.
+
+Implement all additional features as backward-compatible additions.
+
+If a new feature requires a database resource, prefer a new, appropriately related table or server-side function rather than changing an existing table.
+
+Any unavoidable schema changes must be additive, backward-compatible, documented, and necessary for the feature to work. Never perform destructive migrations.
+
+---
+
+2. FEATURE ONE — SMART DOCTOR SEARCH AND FILTER SYSTEM
+
+Objective
+
+Make it easy for patients to find the correct doctor and check relevant availability.
+
+Integrate a Smart Doctor Search system into the existing Doctors and Specializations sections.
+
+Patient-facing functionality
+
+Patients should be able to search doctors using:
+
+- Doctor name.
+- Medical specialization.
+- Department.
+- Available appointment date.
+- Available day, where supported.
+
+Provide:
+
+- A prominent search field.
+- Specialization dropdown.
+- Date selector.
+- Clear Filters action.
+- Search results count.
+- Helpful no-results state.
+- Mobile-friendly filter interface.
+
+Doctor result cards
+
+Each result should display only verified existing information:
+
+- Doctor photograph.
+- Doctor name.
+- Qualification.
+- Specialization.
+- Experience, when available.
+- Brief profile description.
+- Relevant availability information.
+- View Profile button.
+- Book Appointment button.
+
+Availability integration
+
+Availability must be calculated using the existing real data:
+
+- Doctor working schedules.
+- Doctor unavailable dates.
+- Doctor blocked time periods.
+- Existing appointments.
+- Existing slot duration.
+- Existing appointment status rules.
+
+Never display a time slot as available when it is actually unavailable.
+
+Do not expose one patient's appointment information to another patient.
+
+Do not create fake doctor profiles or fictitious availability.
+
+The search system must use the existing doctor and schedule data.
+
+---
+
+3. FEATURE TWO — CLINIC LOCATION, GOOGLE MAPS AND CONTACT INTEGRATION
+
+Objective
+
+Allow patients to easily locate and contact the clinic.
+
+Add a polished Clinic Location and Directions section.
+
+Location UI
+
+Display:
+
+- Verified clinic address.
+- Clinic phone number.
+- Verified clinic email.
+- Operating hours.
+- Google Maps directions action.
+- Call Clinic button.
+- WhatsApp Contact button, if a valid clinic WhatsApp number exists.
+
+Google Maps integration
+
+Requirements:
+
+- Use the actual verified clinic address.
+- Generate a working Google Maps directions link.
+- Allow patients to open directions in Google Maps or their browser.
+- Use an embedded map only if it works reliably and does not significantly affect performance.
+- Do not require an API key for a basic Google Maps directions link.
+- Never invent clinic coordinates or addresses.
+
+Example destination behavior:
+
+Patient taps "Get Directions" → Google Maps opens with the configured clinic destination.
+
+Contact actions
+
+Phone action:
+
+- Use the verified clinic phone number.
+- Open the device calling interface.
+
+Email action:
+
+- Use the verified clinic email.
+- Open the user's configured email application.
+
+WhatsApp action:
+
+- Use the verified clinic WhatsApp number.
+- Open WhatsApp with an appropriate prefilled enquiry message.
+
+Do not invent phone numbers, email addresses, or WhatsApp credentials.
+
+Privacy
+
+Do not automatically collect patient GPS location.
+
+Location sharing must remain optional and user-controlled.
+
+---
+
+4. FEATURE THREE — APPOINTMENT CONFIRMATION SLIP AND DOWNLOAD
+
+Objective
+
+Give patients a professional confirmation document after their appointment has been officially confirmed.
+
+Important distinction
+
+A Pending appointment request is NOT a confirmed appointment.
+
+Provide separate document states:
+
+1. Appointment Request Receipt — for a submitted Pending request.
+2. Appointment Confirmation Slip — only after authorized confirmation.
+
+Never represent a pending booking as confirmed.
+
+Confirmation slip contents
+
+Include:
+
+- Arogya Clinic logo.
+- Clinic name.
+- Verified clinic address.
+- Verified contact details.
+- Unique appointment reference number.
+- Patient name.
+- Doctor name.
+- Doctor specialization.
+- Appointment date.
+- Appointment time.
+- Appointment status.
+- Booking date.
+- Relevant clinic instructions, if configured.
+
+Available actions
+
+Patients should be able to:
+
+- View appointment receipt.
+- Download confirmation slip as PDF.
+- Print appointment details.
+- Open appointment details from the patient portal.
+
+Design
+
+Create a professional, printable document.
+
+Use:
+
+- Clear headings.
+- Clean typography.
+- Appropriate spacing.
+- Easy-to-read appointment details.
+- A print-friendly layout.
+- Professional clinic branding.
+
+Security
+
+Only the authenticated patient who owns the appointment should access their confirmation document.
+
+Authorized staff and administrators may access documents only according to their existing permissions.
+
+Never include medical reports, private clinical notes, unnecessary personal information, passwords, or authentication tokens in the confirmation document.
+
+PDF generation must work on mobile Android browsers as well as desktop browsers.
+
+Do not show a successful download message until the document has actually been generated successfully.
+
+---
+
+5. FEATURE FOUR — ADMIN APPOINTMENT REPORTS AND CSV/EXCEL EXPORT
+
+Objective
+
+Allow authorized clinic administrators to understand appointment activity and export useful operational reports.
+
+Integrate this functionality into the existing Clinic Admin Console.
+
+Report dashboard
+
+Display actual database-backed information such as:
+
+- Total appointments in the selected period.
+- Pending appointments.
+- Confirmed appointments.
+- Completed appointments.
+- Cancelled appointments.
+- Rejected appointments.
+- Missed appointments.
+- Doctor-wise appointment distribution.
+
+Only calculate and display metrics supported by actual database records.
+
+Never fabricate statistics.
+
+Filters
+
+Provide:
+
+- Start date.
+- End date.
+- Doctor filter.
+- Specialization filter.
+- Appointment status.
+- Search by permitted appointment reference or patient details.
+
+Allow administrators to clear filters.
+
+Export functionality
+
+Add:
+
+- Export CSV.
+- Export Excel (.xlsx), if supported reliably by the existing project environment.
+- Print Report.
+
+Exports should respect all currently selected filters.
+
+Report fields
+
+Use only necessary operational fields, such as:
+
+- Appointment reference.
+- Patient name.
+- Doctor name.
+- Specialization.
+- Appointment date.
+- Appointment time.
+- Appointment status.
+- Booking date.
+
+Sensitive medical reports, uploaded prescriptions, private clinical notes, passwords, and tokens must never be included in general exports.
+
+Authorization
+
+- Full export access should be restricted to the authorized main clinic administrator.
+- Staff access must depend on existing permissions.
+- Doctors must never receive unrestricted clinic-wide patient exports.
+- Patients must never access administrative reports.
+
+Security and reliability
+
+- Validate permissions on the server side.
+- Apply current RLS rules.
+- Do not rely only on hiding frontend buttons.
+- Prevent unauthorized access to report endpoints.
+- Avoid exposing sensitive patient information through public URLs.
+- Handle large datasets safely.
+- Provide useful empty, loading, and error states.
+- Where suitable, record export activity in a secure audit log.
+
+---
+
+6. FEATURE FIVE — VERIFIED PATIENT FEEDBACK AND REVIEWS
+
+Objective
+
+Allow genuine patients to submit feedback after completing their clinic visit.
+
+Create a professional patient feedback system.
+
+Review eligibility
+
+Only patients with a genuinely completed appointment should be allowed to submit a review for that appointment.
+
+Requirements:
+
+- The patient must be authenticated.
+- The appointment must belong to that patient.
+- The appointment status must be Completed.
+- One review per completed appointment.
+- Prevent duplicate submissions.
+- Prevent patients from reviewing appointments belonging to other users.
+
+Review form
+
+Include:
+
+- Overall rating from 1 to 5 stars.
+- Short written feedback.
+- Optional doctor-specific feedback, if supported by the existing model.
+- Consent option for public display of the review.
+
+Do not request unnecessary medical information.
+
+Review moderation
+
+New feedback should enter a Pending Review or moderation state.
+
+Authorized administrators can:
+
+- View submitted feedback.
+- Approve reviews.
+- Reject reviews.
+- Hide previously approved reviews when necessary.
+
+Only approved, verified reviews with appropriate public-display consent may appear on the public website.
+
+Public reviews section
+
+Display:
+
+- Approved rating.
+- Approved feedback text.
+- A simple verified-patient indicator.
+
+Do not expose:
+
+- Patient email.
+- Phone number.
+- Appointment reference.
+- Medical history.
+- Diagnosis.
+- Uploaded reports.
+- Private account information.
+
+Important restrictions
+
+Never:
+
+- Generate fake reviews.
+- Invent patient names.
+- Create artificial star ratings.
+- Import unverified testimonials as verified reviews.
+- Automatically approve every review.
+- Manipulate ratings.
+- Promise medical results.
+
+If there are no approved reviews, display a clean empty state rather than fabricated testimonials.
+
+Admin management
+
+Add a Patient Feedback section to the existing Admin Console, using the established authorization structure.
+
+---
+
+7. FEATURE SIX — SMART APPOINTMENT WAITLIST
+
+Objective
+
+Allow interested patients to receive a notification when a suitable appointment slot becomes available.
+
+Integrate a waitlist system with the existing appointment workflow.
+
+Patient-facing functionality
+
+When the desired slot is unavailable, patients can select:
+
+"Join Appointment Waitlist"
+
+Collect only necessary information:
+
+- Authenticated patient ID.
+- Preferred doctor.
+- Relevant specialization, if needed.
+- Preferred date or date range.
+- Preferred time range.
+- Contact/notification preference, where supported.
+- Consent to receive availability notifications.
+
+Allow the patient to view and withdraw their active waitlist requests.
+
+Waitlist eligibility
+
+Check:
+
+- Doctor availability.
+- Existing doctor schedules.
+- Unavailable dates and blocked times.
+- Existing appointments.
+- Existing slot duration.
+- Patient's preferred date and time range.
+
+Do not accept invalid or impossible waitlist requests.
+
+Slot availability event
+
+When an appointment is cancelled or a suitable slot becomes available:
+
+1. Detect the availability event using a reliable server-side process.
+2. Identify eligible waitlist entries.
+3. Process eligible entries in their creation order.
+4. Notify the appropriate eligible patient.
+5. Include the doctor, date, time, and a secure booking action.
+6. Allow the patient to proceed through the existing booking process.
+
+Important booking rules
+
+A waitlist notification is NOT an appointment confirmation.
+
+Do not automatically create a confirmed appointment.
+
+The patient must explicitly accept the available slot and complete the existing booking process.
+
+Do not guarantee the slot remains available after notification.
+
+The existing booking system must remain responsible for final availability validation and double-booking prevention.
+
+Do not bypass:
+
+- Existing appointment validation.
+- Existing doctor availability checks.
+- Existing confirmation rules.
+- Existing authorization.
+- Existing double-booking protection.
+
+If multiple patients qualify, use a fair queue order and a clearly documented offer policy. Prevent repeatedly sending duplicate offers for the same event.
+
+Use server-side idempotency and concurrency safeguards where necessary.
+
+Notifications
+
+Use the existing configured notification infrastructure.
+
+Support available channels such as:
+
+- WhatsApp.
+- SMS.
+- Email.
+- In-app notification.
+
+Do not invent notification providers or claim a message has been sent unless the configured service confirms success.
+
+If a notification service is not configured, clearly identify the missing configuration.
+
+Admin waitlist management
+
+Add a Waitlist Management section in the existing Admin Console.
+
+Administrators should be able to:
+
+- View active waitlist entries.
+- Search by doctor.
+- Filter by date and status.
+- View notification status.
+- Cancel an invalid entry.
+- Review relevant availability events.
+
+Respect existing admin and staff permissions.
+
+Waitlist privacy
+
+Patients must only view and manage their own entries.
+
+Do not expose another patient's waitlist information.
+
+---
+
+8. DATABASE AND SUPABASE IMPLEMENTATION
+
+First inspect the current Supabase database.
+
+Reuse existing tables wherever possible.
+
+Do not duplicate data unnecessarily.
+
+If additional database resources are required, use carefully designed additive migrations.
+
+Possible new resources may include:
+
+- patient_feedback.
+- appointment_waitlist.
+- waitlist_notification_logs.
+- additional audit records where genuinely necessary.
+
+These are proposed resources, not instructions to create duplicate tables if equivalent functionality already exists.
+
+Database requirements
+
+Every additional database resource must have:
+
+- Appropriate primary keys.
+- Correct relationships.
+- Appropriate timestamps.
+- Valid constraints.
+- Necessary indexes.
+- Appropriate ownership fields.
+- Server-side access control.
+- Clear migration documentation.
+
+Row Level Security
+
+RLS must remain enabled where required.
+
+Patient feedback rules:
+
+- Authenticated patients can create reviews only for their own eligible completed appointments.
+- Patients can read and manage only their own private feedback submissions.
+- Public users can read only approved reviews intended for public display.
+
+Waitlist rules:
+
+- Patients can access only their own waitlist entries.
+- Authorized staff and administrators can access information according to existing permissions.
+- Public users cannot read the waitlist.
+
+Reports:
+
+- Administrative report data must be available only to authorized roles.
+- Sensitive fields must remain protected.
+
+Confirmation documents:
+
+- Access must be restricted to the patient who owns the appointment and authorized clinic personnel.
+
+Never expose the Supabase service-role key or other private secrets in frontend code.
+
+Use trusted server-side functions for privileged operations, exports, waitlist processing, and notification integrations where appropriate.
+
+Never create self-assignable admin roles or frontend-only security.
+
+---
+
+9. NOTIFICATION INTEGRATION
+
+Use the existing notification setup.
+
+Integrate new notifications only where supported:
+
+- Appointment waitlist availability.
+- Relevant appointment confirmation document availability.
+- Feedback submission confirmation.
+
+Requirements:
+
+- Use existing provider credentials and server-side configuration.
+- Maintain notification logs where supported.
+- Handle failures without losing essential booking information.
+- Prevent duplicate notifications.
+- Avoid sending unnecessary messages.
+- Respect patient consent and configured preferences.
+
+Do not introduce a paid service without reporting the requirement.
+
+Do not expose provider API keys.
+
+Do not claim WhatsApp, SMS, or email integration is active unless it has been properly configured and successfully tested.
+
+---
+
+10. UI/UX INTEGRATION RULES
+
+The existing Arogya Clinic website has already undergone UI polishing.
+
+Do not redesign it again.
+
+Preserve the current:
+
+- Navy and white healthcare visual theme.
+- Branding.
+- Header.
+- Footer.
+- Typography.
+- Existing card style.
+- Existing button style.
+- Existing navigation.
+- Existing responsive layout.
+
+Add the six features using the existing design language.
+
+New interface components should look like they were part of the original application.
+
+Public pages
+
+Integrate:
+
+- Smart Doctor Search into Doctors and Specializations.
+- Clinic Location and Directions into Contact and relevant homepage sections.
+- Approved Patient Feedback into an appropriate homepage section.
+
+Patient portal
+
+Integrate:
+
+- Appointment Request Receipt.
+- Appointment Confirmation Slip.
+- Waitlist management.
+- Eligible feedback submission.
+
+Admin console
+
+Integrate:
+
+- Appointment Reports and Export.
+- Patient Feedback Moderation.
+- Waitlist Management.
+
+Doctor and staff workspaces
+
+Only add relevant information or controls when appropriate to their existing permissions.
+
+Do not overload any dashboard with irrelevant features.
+
+Mobile experience
+
+Ensure all new features are:
+
+- Fully responsive.
+- Easy to use on Android phones.
+- Readable on small screens.
+- Free from horizontal overflow.
+- Consistent with the current mobile UI.
+
+---
+
+11. ERROR HANDLING AND EDGE CASES
+
+Handle the following properly:
+
+- No doctors found.
+- No matching specialization.
+- No available appointment slots.
+- Invalid date selection.
+- Doctor schedule unavailable.
+- Appointment already cancelled.
+- Appointment status not eligible for confirmation slip.
+- Unauthorized PDF request.
+- Empty reports.
+- Large report exports.
+- Duplicate feedback submission.
+- Feedback submitted for an ineligible appointment.
+- Waitlist entry already exists.
+- Patient withdraws from waitlist.
+- Slot becomes unavailable before patient accepts.
+- Notification provider failure.
+- Network connection failure.
+- Supabase request failure.
+- Unauthorized dashboard access.
+- Invalid or expired user session.
+
+All error states must display understandable messages.
+
+Never silently fail or show fabricated success.
+
+---
+
+12. TESTING AND ACCEPTANCE CRITERIA
+
+After implementation, test every feature.
+
+Smart Doctor Search
+
+- Search by doctor name.
+- Filter by specialization.
+- Filter by date.
+- Clear filters.
+- Verify results use real doctor information.
+- Verify actual availability.
+
+Location and Contact
+
+- Open Google Maps directions.
+- Test phone link.
+- Test email link.
+- Test WhatsApp action when configured.
+- Verify clinic destination is correct.
+
+Confirmation Slip
+
+- Generate Pending request receipt.
+- Confirm a real appointment using the existing authorized workflow.
+- Generate the confirmation slip.
+- Download PDF.
+- Print PDF.
+- Test on Android mobile.
+- Verify unauthorized users cannot access the document.
+
+Reports and Export
+
+- Verify dashboard totals against actual database records.
+- Test date filters.
+- Test doctor filters.
+- Test status filters.
+- Export CSV.
+- Export XLSX if implemented.
+- Verify permissions.
+- Verify sensitive data is excluded.
+
+Patient Feedback
+
+- Submit feedback for a completed appointment.
+- Attempt feedback for a pending appointment.
+- Attempt duplicate feedback.
+- Test moderation.
+- Test public display consent.
+- Verify private patient details are never exposed.
+
+Waitlist
+
+- Join a waitlist.
+- View waitlist entry.
+- Withdraw entry.
+- Simulate a suitable slot becoming available.
+- Verify eligible notification generation.
+- Test notification failure.
+- Test patient acceptance.
+- Recheck slot availability before booking.
+- Confirm no double booking can occur.
+- Verify notification is not mistaken for appointment confirmation.
+
+Regression Testing
+
+Also verify every existing feature still works:
+
+- Patient registration.
+- Patient login.
+- Doctor login.
+- Staff login.
+- Admin login.
+- Patient dashboard.
+- Doctor dashboard.
+- Staff dashboard.
+- Admin dashboard.
+- Appointment booking.
+- Appointment approval.
+- Appointment cancellation.
+- Appointment rescheduling.
+- Doctor schedules.
+- Medical document uploads.
+- Existing database queries.
+- Existing notification workflows.
+- Existing navigation.
+- Existing mobile layout.
+
+Run available TypeScript checks, build commands, and tests.
+
+Fix regressions caused by the new implementation.
+
+If a test cannot be run because credentials, provider configuration, or environment access is missing, report that limitation honestly.
+
+---
+
+13. EXECUTION PLAN — COMPLETE ALL SIX FEATURES IN ONE PASS
+
+Perform the entire implementation systematically:
+
+1. Inspect the existing project.
+2. Create a backup or restore point where supported.
+3. Map existing components, routes, backend resources, and permissions.
+4. Prepare a backward-compatible implementation plan.
+5. Implement Smart Doctor Search.
+6. Implement Google Maps, location, and contact integration.
+7. Implement Appointment Receipt and Confirmation PDF.
+8. Implement Admin Reports and Export.
+9. Implement Verified Patient Feedback and Moderation.
+10. Implement Smart Appointment Waitlist.
+11. Add only the necessary new database resources and server-side functions.
+12. Configure secure permissions and RLS for new resources.
+13. Integrate new features into existing pages and dashboards.
+14. Preserve the existing UI identity and responsive design.
+15. Run feature-specific tests.
+16. Run full regression tests.
+17. Fix issues introduced by the implementation.
+18. Produce a detailed final implementation report.
+
+Do not stop after writing an implementation plan.
+
+Do not create static, non-functional placeholder buttons.
+
+Do not mark an unfinished integration as completed.
+
+Complete all six features in the same implementation pass wherever the existing project environment permits.
+
+If the environment prevents any part from being completed, clearly identify the exact incomplete feature, its blocker, and the remaining work.
+
+---
+
+14. FINAL IMPLEMENTATION REPORT
+
+At the end, provide a clear report showing:
+
+For each of the six features:
+
+- Frontend status.
+- Backend status.
+- Database status.
+- Security and permissions status.
+- Integration status.
+- Testing status.
+
+Also report:
+
+- New database resources created.
+- New server-side functions created.
+- Existing files modified.
+- Any required API keys or paid service configuration.
+- Any incomplete functionality.
+- Any security concerns discovered.
+- Build and TypeScript check results.
+- Confirmation that existing features were regression-tested.
+
+Use these status labels:
+
+- COMPLETED AND TESTED
+- IMPLEMENTED BUT NOT FULLY TESTED
+- BLOCKED BY CONFIGURATION
+- NOT IMPLEMENTED
+
+Never claim that something works unless it has actually been tested.
+
+---
+
+FINAL PRODUCT OBJECTIVE
+
+Arogya Clinic should now have six additional genuinely useful capabilities:
+
+1. Smart Doctor Search.
+2. Clinic Location, Google Maps and Contact Integration.
+3. Appointment Confirmation Slip and PDF Download.
+4. Admin Appointment Reports and CSV/Excel Export.
+5. Verified Patient Feedback and Reviews.
+6. Smart Appointment Waitlist.
+
+The result must remain the SAME existing Arogya Clinic application, with its existing design identity, backend, authentication, appointment workflow, dashboards, and working features preserved.
+
+Priority: Preserve existing functionality first, implement secure new features second, and verify the entire application before reporting completion.
+
+Now inspect the existing project and implement all six additional features in one complete development pass.

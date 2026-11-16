@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Arogya Multi-Specialty Clinic – Specialist Care & Appointments</title>
+    <meta
+      name="description"
+      content="Book verified specialist consultations across Cardiology, Pediatrics, Orthopedics, Dermatology, and General Medicine at Arogya Multi-Specialty Clinic in English and Hindi."
+    />
+    <meta
+      name="keywords"
+      content="Arogya Multi-Specialty Clinic, New Delhi Clinic, Cardiology, Pediatrics, Orthopedics, Dermatology, Internal Medicine, OPD Appointment Booking"
+    />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Arogya Multi-Specialty Clinic – Specialist Care & Appointments" />
+    <meta
+      property="og:description"
+      content="Thoughtful, coordinated multi-specialty outpatient care with transparent appointment scheduling and dedicated patient, doctor, and clinic portals."
+    />
+    <meta property="og:site_name" content="Arogya Multi-Specialty Clinic" />
+    <meta property="og:image" content="/og-clinic.jpg" />
+    <meta property="og:locale" content="en_IN" />
+    <meta property="og:locale:alternate" content="hi_IN" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Arogya Multi-Specialty Clinic – Specialist Care & Appointments" />
+    <meta
+      name="twitter:description"
+      content="Schedule specialist medical consultations and manage clinic visits seamlessly in English or Hindi."
+    />
+    <meta name="twitter:image" content="/og-clinic.jpg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..600&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "MedicalClinic",
+        "name": "Arogya Multi-Specialty Clinic",
+        "description": "Multi-specialty outpatient healthcare clinic offering Cardiology, Pediatrics, Orthopedics, Dermatology, and Internal Medicine consultations.",
+        "medicalSpecialty": [
+          "Cardiology",
+          "Pediatric",
+          "Orthopedic",
+          "Dermatology",
+          "InternalMedicine"
+        ],
+        "openingHours": "Mo-Sa 08:30-20:00",
+        "availableLanguage": ["English", "Hindi"]
+      }
+    </script>
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('arogya_theme');
+          var mode = saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'system';
+          var prefersDark =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var isDark = mode === 'dark' || (mode === 'system' && prefersDark);
+          var root = document.documentElement;
+          root.classList.toggle('dark', isDark);
+          root.dataset.theme = isDark ? 'dark' : 'light';
+          root.style.colorScheme = isDark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

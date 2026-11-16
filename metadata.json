@@ -1,0 +1,6 @@
+{
+  "name": "Arogya Multi-Specialty Clinic",
+  "description": "Comprehensive multi-specialty outpatient healthcare, verified specialist consultations, and bilingual English-Hindi appointment booking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
