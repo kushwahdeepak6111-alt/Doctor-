@@ -6,6 +6,7 @@ import { ClinicLogo } from './ClinicLogo';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { WhatsAppIcon } from './WhatsAppIcon';
 import { getPhoneCallHref, getWhatsAppHref } from '../lib/contactLinks';
+import { prefetchRoute } from '../lib/routePrefetch';
 
 export function Navbar() {
   const { language, setLanguage, route, navigate, user, specializations, setBookingDraft, settings } =
@@ -67,7 +68,7 @@ export function Navbar() {
         </button>
 
         {/* Zone 2: Primary Desktop Navigation */}
-        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-4 xl:gap-6">
+        <nav aria-label="Main navigation" className="hidden lg:flex items-center gap-3 xl:gap-6">
           {navItems.map((item) => {
             const active = isActive(item.path);
             return (
@@ -75,8 +76,11 @@ export function Navbar() {
                 key={item.path}
                 type="button"
                 onClick={() => handleNav(item.path)}
+                onMouseEnter={() => prefetchRoute(item.path)}
+                onFocus={() => prefetchRoute(item.path)}
+                onTouchStart={() => prefetchRoute(item.path)}
                 aria-current={active ? 'page' : undefined}
-                className={`relative py-2 text-[14px] font-medium whitespace-nowrap shrink-0 transition-colors ${
+                className={`relative py-2 text-[13px] xl:text-[14px] font-medium whitespace-nowrap shrink-0 transition-colors ${
                   active ? 'text-white font-semibold' : 'text-slate-300 hover:text-white'
                 }`}
               >
@@ -93,12 +97,12 @@ export function Navbar() {
         </nav>
 
         {/* Zone 3: Theme, Language, Account, Primary Booking CTA */}
-        <div className="hidden lg:flex items-center gap-2 shrink-0">
+        <div className="hidden lg:flex items-center gap-1.5 xl:gap-2 shrink-0">
           <ThemeSwitcher variant="compact" />
           <button
             type="button"
             onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
-            className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 rounded-full border border-white/15 whitespace-nowrap shrink-0 transition-colors"
+            className="min-h-[40px] inline-flex items-center gap-1.5 px-2.5 xl:px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white hover:bg-white/10 rounded-full border border-white/15 whitespace-nowrap shrink-0 transition-colors"
             aria-label={language === 'en' ? 'Switch language to Hindi' : 'Switch language to English'}
           >
             <Globe className="w-3.5 h-3.5 text-[#60A5FA]" aria-hidden="true" />
@@ -107,21 +111,35 @@ export function Navbar() {
 
           <button
             type="button"
-            onClick={() => handleNav(user ? '/portal' : '/login')}
-            className={`min-h-[40px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-medium rounded-full whitespace-nowrap shrink-0 transition-colors ${
-              isActive('/portal') || isActive('/login')
+            onClick={() => handleNav(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
+            onMouseEnter={() => prefetchRoute(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
+            onFocus={() => prefetchRoute(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
+            onTouchStart={() => prefetchRoute(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
+            className={`min-h-[40px] inline-flex items-center gap-1.5 px-2.5 xl:px-3.5 py-1.5 text-[13px] font-medium rounded-full whitespace-nowrap shrink-0 transition-colors ${
+              isActive('/portal') || isActive('/admin') || isActive('/login')
                 ? 'bg-white/15 text-white border border-white/25'
                 : 'text-slate-200 hover:text-white hover:bg-white/10'
             }`}
           >
             <User className="w-4 h-4 text-[#60A5FA]" aria-hidden="true" />
-            <span>{user ? t.nav.portal : t.nav.login}</span>
+            <span>
+              {user
+                ? user.role === 'admin'
+                  ? language === 'hi'
+                    ? 'एडमिन पैनल'
+                    : 'Admin Panel'
+                  : t.nav.portal
+                : t.nav.login}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => handleNav('/book')}
-            className="min-h-[40px] px-5 py-2 text-[13px] font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-full whitespace-nowrap shrink-0 transition-colors"
+            onMouseEnter={() => prefetchRoute('/book')}
+            onFocus={() => prefetchRoute('/book')}
+            onTouchStart={() => prefetchRoute('/book')}
+            className="min-h-[40px] px-4 xl:px-5 py-2 text-[13px] font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-full whitespace-nowrap shrink-0 transition-colors"
           >
             {t.nav.book}
           </button>
@@ -156,7 +174,7 @@ export function Navbar() {
       {mobileOpen && (
         <div
           id="mobile-nav-drawer"
-          className="lg:hidden border-t border-white/10 bg-[#071A30] text-white max-h-[calc(100vh-4rem)] overflow-y-auto shadow-2xl"
+          className="lg:hidden border-t border-white/10 bg-[#071A30] text-white max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain shadow-2xl"
         >
           <div className="px-4 py-4 space-y-5">
             {/* Drawer Header with explicit close label */}
@@ -167,7 +185,7 @@ export function Navbar() {
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                className="min-h-[36px] inline-flex items-center gap-1 px-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 rounded-lg"
+                className="min-h-[44px] inline-flex items-center gap-1.5 px-3 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/10 rounded-lg"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
                 <span>{language === 'hi' ? 'बंद करें' : 'Close'}</span>
@@ -183,6 +201,7 @@ export function Navbar() {
                     key={item.path}
                     type="button"
                     onClick={() => handleNav(item.path)}
+                    onTouchStart={() => prefetchRoute(item.path)}
                     aria-current={active ? 'page' : undefined}
                     className={`w-full min-h-[44px] text-left px-3.5 py-2.5 rounded-xl text-[15px] font-medium flex items-center justify-between transition-colors ${
                       active
@@ -209,7 +228,8 @@ export function Navbar() {
                       key={spec.id}
                       type="button"
                       onClick={() => handleDepartmentNav(spec.id)}
-                      className="min-h-[40px] px-3 py-2 text-left text-xs font-medium text-slate-200 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg truncate transition-colors"
+                      onTouchStart={() => prefetchRoute('/specializations')}
+                      className="min-h-[44px] px-3 py-2 text-left text-xs font-medium text-slate-200 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg truncate transition-colors"
                     >
                       {language === 'hi' ? spec.nameHi : spec.name}
                     </button>
@@ -222,15 +242,25 @@ export function Navbar() {
             <div className="pt-3 border-t border-white/10 grid grid-cols-1 gap-2.5">
               <button
                 type="button"
-                onClick={() => handleNav(user ? '/portal' : '/login')}
+                onClick={() => handleNav(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
+                onTouchStart={() => prefetchRoute(user ? (user.role === 'admin' ? '/admin' : '/portal') : '/login')}
                 className="w-full min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl transition-colors"
               >
                 <User className="w-4 h-4 text-[#60A5FA]" aria-hidden="true" />
-                <span>{user ? t.nav.portal : t.nav.login}</span>
+                <span>
+                  {user
+                    ? user.role === 'admin'
+                      ? language === 'hi'
+                        ? 'एडमिन पैनल'
+                        : 'Admin Panel'
+                      : t.nav.portal
+                    : t.nav.login}
+                </span>
               </button>
               <button
                 type="button"
                 onClick={() => handleNav('/book')}
+                onTouchStart={() => prefetchRoute('/book')}
                 className="w-full min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-xl transition-colors"
               >
                 <CalendarCheck2 className="w-4 h-4" aria-hidden="true" />

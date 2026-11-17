@@ -531,7 +531,11 @@ function buildSitemapEntries(db: ClinicDatabase, origin: string) {
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '6mb' }));
-  app.use(attachUser);
+  app.use('/api', attachUser);
+  app.use(['/favicon.svg', '/og-clinic.jpg'], (_req, res, next) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    next();
+  });
 
   // Dynamic Search Engine Sitemap & Robots.txt
   app.get('/sitemap.xml', (req, res) => {
@@ -562,6 +566,7 @@ async function startServer() {
           'User-agent: *',
           'Allow: /',
           'Disallow: /portal',
+          'Disallow: /admin',
           'Disallow: /login',
           'Disallow: /api/',
           `Sitemap: ${origin}/sitemap.xml`,
@@ -1894,7 +1899,7 @@ async function startServer() {
       robotsUrl: `${origin}/robots.txt`,
       allowIndexing: db.settings.seo?.allowIndexing !== false,
       indexedRoutes: entries,
-      excludedRoutes: ['/portal', '/login', '/api/*'],
+      excludedRoutes: ['/portal', '/admin', '/login', '/api/*'],
       activeDoctorCount: db.doctors.filter((d) => d.active).length,
       activeSpecializationCount: db.specializations.filter((s) => s.active).length,
       approvedFeedbackCount,
@@ -1983,8 +1988,19 @@ async function startServer() {
   // Vite or static serving
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        maxAge: '1y',
+        immutable: true,
+        setHeaders(res, filePath) {
+          if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache');
+          }
+        },
+      })
+    );
     app.get('*', (_req, res) => {
+      res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {

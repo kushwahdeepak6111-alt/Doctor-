@@ -11,6 +11,43 @@ import type {
 } from '../types/clinic';
 import { apiFetch, clearSessionToken, saveSessionToken } from '../lib/authFetch';
 
+interface BootstrapCachePayload {
+  settings: ClinicSettings | null;
+  specializations: Specialization[];
+  doctors: Doctor[];
+  reviewSummary: ReviewSummary | null;
+}
+
+const BOOTSTRAP_CACHE_KEY = 'arogya_bootstrap_cache_v1';
+
+function readBootstrapCache(): BootstrapCachePayload | null {
+  try {
+    if (typeof window === 'undefined' || !window.sessionStorage) return null;
+    const raw = window.sessionStorage.getItem(BOOTSTRAP_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BootstrapCachePayload>;
+    if (!Array.isArray(parsed.specializations) || !Array.isArray(parsed.doctors)) return null;
+    return {
+      settings: parsed.settings || null,
+      specializations: parsed.specializations,
+      doctors: parsed.doctors,
+      reviewSummary: parsed.reviewSummary || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeBootstrapCache(payload: BootstrapCachePayload): void {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(payload));
+    }
+  } catch {
+    // Ignore storage quota / sandbox restrictions
+  }
+}
+
 export interface BookingDraft {
   step: number;
   specializationId: string;
@@ -147,13 +184,20 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
+  const [initialCache] = useState<BootstrapCachePayload | null>(() => readBootstrapCache());
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [specializations, setSpecializations] = useState<Specialization[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [settings, setSettings] = useState<ClinicSettings | null>(null);
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
-  const [bootstrapLoading, setBootstrapLoading] = useState(true);
+  const [specializations, setSpecializations] = useState<Specialization[]>(
+    () => initialCache?.specializations || []
+  );
+  const [doctors, setDoctors] = useState<Doctor[]>(() => initialCache?.doctors || []);
+  const [settings, setSettings] = useState<ClinicSettings | null>(
+    () => initialCache?.settings || null
+  );
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(
+    () => initialCache?.reviewSummary || null
+  );
+  const [bootstrapLoading, setBootstrapLoading] = useState(!initialCache);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(INITIAL_DRAFT);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
@@ -221,9 +265,14 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     try {
       const currentFull = `${window.location.pathname}${window.location.search}`;
       if (currentFull !== normalized) {
-        window.history.pushState({}, '', normalized);
+        const currentState =
+          window.history.state && typeof window.history.state === 'object'
+            ? window.history.state
+            : {};
+        window.history.replaceState({ ...currentState, scrollY: window.scrollY }, '');
+        window.history.pushState({ scrollY: 0 }, '', normalized);
       }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: 'auto' });
     } catch {
       // Fallback for restricted history contexts
     }
@@ -246,22 +295,34 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        window.history.pushState({}, '', normalizedTarget);
+        const currentState =
+          window.history.state && typeof window.history.state === 'object'
+            ? window.history.state
+            : {};
+        window.history.replaceState({ ...currentState, scrollY: window.scrollY }, '');
+        window.history.pushState({ scrollY: 0 }, '', normalizedTarget);
       } catch {
         // Fallback for restricted history contexts
       }
       setRoute(normalizedTarget);
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         requestAnimationFrame(doScroll);
-      }, 90);
+      });
     },
     [route]
   );
 
   useEffect(() => {
-    const onPopState = () => {
+    const onPopState = (event: PopStateEvent) => {
       try {
         setRoute(window.location.pathname || '/');
+        const savedY =
+          event.state && typeof event.state === 'object' && typeof event.state.scrollY === 'number'
+            ? event.state.scrollY
+            : 0;
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: savedY, behavior: 'auto' });
+        });
       } catch {
         setRoute('/');
       }
@@ -272,7 +333,6 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const refreshBootstrap = useCallback(async () => {
     try {
-      setBootstrapLoading(true);
       const res = await apiFetch('/api/clinic/bootstrap');
       if (!res.ok) throw new Error('Failed to load clinic directory');
       const data = (await res.json()) as {
@@ -281,10 +341,17 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         doctors?: Doctor[];
         reviewSummary?: ReviewSummary;
       };
-      setSettings(data.settings || null);
-      setSpecializations(Array.isArray(data.specializations) ? data.specializations : []);
-      setDoctors(Array.isArray(data.doctors) ? data.doctors : []);
-      setReviewSummary(data.reviewSummary || null);
+      const nextPayload: BootstrapCachePayload = {
+        settings: data.settings || null,
+        specializations: Array.isArray(data.specializations) ? data.specializations : [],
+        doctors: Array.isArray(data.doctors) ? data.doctors : [],
+        reviewSummary: data.reviewSummary || null,
+      };
+      setSettings(nextPayload.settings);
+      setSpecializations(nextPayload.specializations);
+      setDoctors(nextPayload.doctors);
+      setReviewSummary(nextPayload.reviewSummary);
+      writeBootstrapCache(nextPayload);
     } catch (err) {
       console.error(err);
     } finally {

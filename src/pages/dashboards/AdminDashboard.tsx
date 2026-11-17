@@ -11,6 +11,7 @@ import {
   Globe,
   LayoutDashboard,
   LogOut,
+  Mail,
   MessageSquareQuote,
   Plus,
   Printer,
@@ -18,6 +19,7 @@ import {
   RotateCcw,
   Search,
   Settings as SettingsIcon,
+  ShieldCheck,
   Star,
   Stethoscope,
   UserCheck,
@@ -33,7 +35,9 @@ import type {
   Appointment,
   AppointmentStatus,
   AppointmentWaitlistEntry,
+  AuditLogEntry,
   ClinicSettings,
+  ContactMessage,
   Doctor,
   FeedbackStatus,
   NotificationChannel,
@@ -56,6 +60,7 @@ type AdminSection =
   | 'reports'
   | 'feedback'
   | 'waitlist'
+  | 'inquiries'
   | 'seo'
   | 'settings';
 
@@ -68,6 +73,9 @@ export function AdminDashboard() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [specializations, setSpecializations] = useState<Specialization[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [inquiryFilter, setInquiryFilter] = useState<'all' | 'new' | 'reviewed'>('all');
   const [settingsForm, setSettingsForm] = useState<ClinicSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -173,6 +181,8 @@ export function AdminDashboard() {
       setDoctors(data.doctors || []);
       setSpecializations(data.specializations || []);
       setUsers(data.users || []);
+      setContactMessages(data.contactMessages || []);
+      setAuditLogs(data.auditLogs || []);
       setSettingsForm(data.settings || null);
       if (data.specializations?.[0]?.id) {
         setNewDocSpec((prev) => prev || data.specializations[0].id);
@@ -507,7 +517,54 @@ export function AdminDashboard() {
     }
   };
 
-  const navItems: { id: AdminSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const handleToggleInquiryStatus = async (id: string, nextStatus: 'new' | 'reviewed') => {
+    const res = await apiFetch(`/api/contact/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    if (res.ok) {
+      setContactMessages((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, status: nextStatus } : m))
+      );
+      addToast(
+        nextStatus === 'reviewed'
+          ? language === 'hi'
+            ? 'संदेश समीक्षित चिह्नित किया गया।'
+            : 'Inquiry marked as reviewed.'
+          : language === 'hi'
+            ? 'संदेश पुनः खोला गया।'
+            : 'Inquiry reopened as new.',
+        'success'
+      );
+    } else {
+      addToast(
+        language === 'hi' ? 'संदेश स्थिति अपडेट विफल।' : 'Unable to update inquiry status.',
+        'error'
+      );
+    }
+  };
+
+  const unreadInquiriesCount = useMemo(
+    () => contactMessages.filter((m) => m.status === 'new').length,
+    [contactMessages]
+  );
+
+  const filteredInquiries = useMemo(
+    () =>
+      inquiryFilter === 'all'
+        ? contactMessages
+        : contactMessages.filter((m) => m.status === inquiryFilter),
+    [contactMessages, inquiryFilter]
+  );
+
+  const navItems: {
+    id: AdminSection;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: number;
+  }[] = [
     { id: 'overview', label: t.portal.admin.nav.overview, icon: LayoutDashboard },
     { id: 'appointments', label: t.portal.admin.nav.appointments, icon: Calendar },
     { id: 'doctors', label: t.portal.admin.nav.doctors, icon: Stethoscope },
@@ -518,6 +575,12 @@ export function AdminDashboard() {
     { id: 'reports', label: t.portal.admin.nav.reports, icon: BarChart3 },
     { id: 'feedback', label: t.portal.admin.nav.feedback, icon: MessageSquareQuote },
     { id: 'waitlist', label: t.portal.admin.nav.waitlist, icon: Bell },
+    {
+      id: 'inquiries',
+      label: t.portal.admin.nav.inquiries,
+      icon: Mail,
+      badge: unreadInquiriesCount > 0 ? unreadInquiriesCount : undefined,
+    },
     { id: 'seo', label: t.portal.admin.nav.seo, icon: Globe },
     { id: 'settings', label: t.portal.admin.nav.settings, icon: SettingsIcon },
   ];
@@ -553,7 +616,18 @@ export function AdminDashboard() {
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate flex-1">{item.label}</span>
+                    {typeof item.badge === 'number' && (
+                      <span
+                        className={`px-1.5 py-0.5 text-[10px] font-mono font-bold rounded-md tabular-nums ${
+                          active
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[#1C7ED6] text-white'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -693,6 +767,69 @@ export function AdminDashboard() {
                           )}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Recent Admin & Clinic Audit Activity */}
+                    <div className="bg-white border border-[#E2EAF2] rounded-2xl p-6 shadow-xs space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-[#1C7ED6]" aria-hidden="true" />
+                          <h2 className="font-display text-base font-bold text-[#0B2D52]">
+                            {language === 'hi' ? 'हाल की क्लिनिक ऑडिट गतिविधियाँ' : 'Recent Clinic & Admin Audit Trail'}
+                          </h2>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void loadAdminData()}
+                          className="min-h-[34px] inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-[#0B2D52] bg-[#F4F8FC] hover:bg-[#EAF3FC] border border-[#E2EAF2] rounded-lg transition-colors"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{language === 'hi' ? 'रीफ़्रेश करें' : 'Refresh'}</span>
+                        </button>
+                      </div>
+                      {auditLogs.length === 0 ? (
+                        <p className="text-xs text-[#5C6F84]">
+                          {language === 'hi' ? 'अभी तक कोई ऑडिट प्रविष्टि नहीं है।' : 'No recent audit events recorded.'}
+                        </p>
+                      ) : (
+                        <div className="border border-[#E2EAF2] rounded-xl overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-[#F4F8FC] border-b border-[#E2EAF2] font-semibold text-[#5C6F84]">
+                                <th className="px-3 py-2.5 whitespace-nowrap">
+                                  {language === 'hi' ? 'समय' : 'Timestamp'}
+                                </th>
+                                <th className="px-3 py-2.5 whitespace-nowrap">
+                                  {language === 'hi' ? 'उपयोगकर्ता' : 'Actor'}
+                                </th>
+                                <th className="px-3 py-2.5 whitespace-nowrap">
+                                  {language === 'hi' ? 'गतिविधि' : 'Action'}
+                                </th>
+                                <th className="px-3 py-2.5">
+                                  {language === 'hi' ? 'विवरण' : 'Details'}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-[#E2EAF2]">
+                              {auditLogs.slice(0, 10).map((log) => (
+                                <tr key={log.id}>
+                                  <td className="px-3 py-2 font-mono tabular-nums whitespace-nowrap text-[#5C6F84]">
+                                    {log.createdAt.slice(0, 19).replace('T', ' ')}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    <span className="font-medium text-[#0B2D52]">{log.actorEmail}</span>{' '}
+                                    <span className="text-[10px] uppercase text-[#5C6F84]">({log.actorRole})</span>
+                                  </td>
+                                  <td className="px-3 py-2 font-mono font-semibold text-[#1C7ED6] whitespace-nowrap">
+                                    {log.action}
+                                  </td>
+                                  <td className="px-3 py-2 text-[#10233B] min-w-[240px]">{log.details}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1769,6 +1906,117 @@ export function AdminDashboard() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {section === 'inquiries' && (
+                  <div className="bg-white border border-[#E2EAF2] rounded-2xl p-6 shadow-xs space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <h2 className="font-display text-xl font-bold text-[#0B2D52]">
+                          {t.portal.admin.nav.inquiries}
+                        </h2>
+                        <p className="text-xs text-[#5C6F84] mt-0.5">
+                          {language === 'hi'
+                            ? 'क्लिनिक संपर्क फ़ॉर्म से प्राप्त रोगी संदेश और स्थिति प्रबंधन।'
+                            : 'Messages submitted from the public clinic contact desk form.'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(['all', 'new', 'reviewed'] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            type="button"
+                            onClick={() => setInquiryFilter(tab)}
+                            className={`min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors ${
+                              inquiryFilter === tab
+                                ? 'bg-[#0B2D52] text-white border-[#0B2D52]'
+                                : 'bg-[#F4F8FC] text-[#10233B] border-[#E2EAF2] hover:bg-[#EAF3FC]'
+                            }`}
+                          >
+                            {tab === 'all'
+                              ? language === 'hi'
+                                ? `सभी (${contactMessages.length})`
+                                : `All (${contactMessages.length})`
+                              : tab === 'new'
+                                ? language === 'hi'
+                                  ? `नए (${unreadInquiriesCount})`
+                                  : `New (${unreadInquiriesCount})`
+                                : language === 'hi'
+                                  ? `समीक्षित (${contactMessages.length - unreadInquiriesCount})`
+                                  : `Reviewed (${contactMessages.length - unreadInquiriesCount})`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {filteredInquiries.length === 0 ? (
+                      <div className="border border-[#E2EAF2] rounded-xl p-8 text-center bg-[#F4F8FC]">
+                        <p className="text-sm text-[#5C6F84]">
+                          {language === 'hi' ? 'कोई संपर्क संदेश नहीं मिला।' : 'No contact inquiries match this filter.'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {filteredInquiries.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className="border border-[#E2EAF2] rounded-xl p-4 flex flex-col md:flex-row md:items-start justify-between gap-4"
+                          >
+                            <div className="space-y-1.5 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`px-2 py-0.5 text-[11px] font-semibold rounded-md border ${
+                                    msg.status === 'new'
+                                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                >
+                                  {msg.status === 'new'
+                                    ? language === 'hi'
+                                      ? 'नया संदेश'
+                                      : 'New'
+                                    : language === 'hi'
+                                      ? 'समीक्षित'
+                                      : 'Reviewed'}
+                                </span>
+                                <span className="font-semibold text-sm text-[#0B2D52]">{msg.subject}</span>
+                                <span className="font-mono text-[11px] text-[#5C6F84] tabular-nums">
+                                  {msg.createdAt.slice(0, 16).replace('T', ' ')}
+                                </span>
+                              </div>
+                              <p className="text-xs text-[#5C6F84]">
+                                <strong className="text-[#10233B]">{msg.name}</strong> · {msg.email}
+                                {msg.phone ? ` · ${msg.phone}` : ''}
+                              </p>
+                              <p className="text-sm text-[#10233B] leading-relaxed">{msg.message}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void handleToggleInquiryStatus(
+                                  msg.id,
+                                  msg.status === 'new' ? 'reviewed' : 'new'
+                                )
+                              }
+                              className={`self-start min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-xl border shrink-0 transition-colors ${
+                                msg.status === 'new'
+                                  ? 'text-white bg-[#1C7ED6] hover:bg-[#1868B2] border-[#1C7ED6]'
+                                  : 'text-[#0B2D52] bg-[#F4F8FC] hover:bg-[#EAF3FC] border-[#E2EAF2]'
+                              }`}
+                            >
+                              {msg.status === 'new'
+                                ? language === 'hi'
+                                  ? 'समीक्षित चिह्नित करें'
+                                  : 'Mark Reviewed'
+                                : language === 'hi'
+                                  ? 'पुनः खोलें'
+                                  : 'Reopen'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { ClinicProvider, useClinic } from './context/ClinicContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
@@ -6,18 +6,52 @@ import { ToastHost } from './components/ToastHost';
 import { FloatingContactButtons } from './components/FloatingContactButtons';
 import { SeoHead } from './components/SeoHead';
 import { HomePage } from './pages/HomePage';
-import { AboutPage } from './pages/AboutPage';
-import { DoctorsPage } from './pages/DoctorsPage';
-import { DoctorDetailPage } from './pages/DoctorDetailPage';
-import { SpecializationsPage } from './pages/SpecializationsPage';
-import { BookingPage } from './pages/BookingPage';
-import { FaqPage } from './pages/FaqPage';
-import { ContactPage } from './pages/ContactPage';
-import { LoginPage } from './pages/LoginPage';
-import { PortalPage } from './pages/PortalPage';
+import { routeLoaders, warmPrimaryRoutes } from './lib/routePrefetch';
+
+const AboutPage = lazy(() => routeLoaders.about().then((m) => ({ default: m.AboutPage })));
+const DoctorsPage = lazy(() => routeLoaders.doctors().then((m) => ({ default: m.DoctorsPage })));
+const DoctorDetailPage = lazy(() =>
+  routeLoaders.doctorDetail().then((m) => ({ default: m.DoctorDetailPage }))
+);
+const SpecializationsPage = lazy(() =>
+  routeLoaders.specializations().then((m) => ({ default: m.SpecializationsPage }))
+);
+const BookingPage = lazy(() => routeLoaders.book().then((m) => ({ default: m.BookingPage })));
+const FaqPage = lazy(() => routeLoaders.faq().then((m) => ({ default: m.FaqPage })));
+const ContactPage = lazy(() => routeLoaders.contact().then((m) => ({ default: m.ContactPage })));
+const LoginPage = lazy(() => routeLoaders.login().then((m) => ({ default: m.LoginPage })));
+const PortalPage = lazy(() => routeLoaders.portal().then((m) => ({ default: m.PortalPage })));
+const AdminPage = lazy(() => routeLoaders.admin().then((m) => ({ default: m.AdminPage })));
+
+function PageLoadingFallback() {
+  return (
+    <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-5 min-h-[60vh]">
+      <div className="h-8 w-56 rounded-xl bg-[#F4F8FC] border border-[#E2EAF2] animate-pulse" />
+      <div className="h-32 w-full rounded-2xl bg-[#F4F8FC] border border-[#E2EAF2] animate-pulse" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="h-44 rounded-2xl bg-[#F4F8FC] border border-[#E2EAF2] animate-pulse" />
+        <div className="h-44 rounded-2xl bg-[#F4F8FC] border border-[#E2EAF2] animate-pulse" />
+        <div className="h-44 rounded-2xl bg-[#F4F8FC] border border-[#E2EAF2] animate-pulse" />
+      </div>
+    </div>
+  );
+}
 
 function ClinicShell() {
   const { route } = useClinic();
+
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof win.requestIdleCallback === 'function') {
+      const id = win.requestIdleCallback(() => warmPrimaryRoutes(), { timeout: 1200 });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const timer = window.setTimeout(() => warmPrimaryRoutes(), 500);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const renderPage = () => {
     if (route === '/' || route === '') return <HomePage />;
@@ -33,6 +67,7 @@ function ClinicShell() {
     if (route === '/contact') return <ContactPage />;
     if (route === '/login') return <LoginPage />;
     if (route === '/portal') return <PortalPage />;
+    if (route === '/admin' || route.startsWith('/admin/')) return <AdminPage />;
     return <HomePage />;
   };
 
@@ -46,7 +81,11 @@ function ClinicShell() {
       </a>
       <Navbar />
       <main id="main-content" className="flex-1">
-        {renderPage()}
+        <Suspense fallback={<PageLoadingFallback />}>
+          <div key={route} className="route-enter">
+            {renderPage()}
+          </div>
+        </Suspense>
       </main>
       <Footer />
       <FloatingContactButtons />

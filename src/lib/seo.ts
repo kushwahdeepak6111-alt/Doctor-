@@ -71,6 +71,8 @@ export function buildRouteSeoMeta(params: {
   const isPrivateRoute =
     normalizedRoute === '/portal' ||
     normalizedRoute.startsWith('/portal/') ||
+    normalizedRoute === '/admin' ||
+    normalizedRoute.startsWith('/admin/') ||
     normalizedRoute === '/login';
 
   const robots: 'index, follow' | 'noindex, nofollow' =
@@ -174,6 +176,11 @@ export function buildRouteSeoMeta(params: {
     description = isHi
       ? 'अपने अपॉइंटमेंट, रिपोर्ट और क्लिनिक कार्यप्रवाह प्रबंधित करें।'
       : 'Manage your appointments, medical documents, and clinic operations.';
+  } else if (normalizedRoute === '/admin' || normalizedRoute.startsWith('/admin/')) {
+    title = isHi ? `क्लिनिक एडमिन पैनल – ${brandShort}` : `Clinic Admin Panel – ${brandShort}`;
+    description = isHi
+      ? 'चिकित्सक, स्टाफ, अपॉइंटमेंट, रिपोर्ट और क्लिनिक सेटिंग्स प्रबंधन के लिए सुरक्षित एडमिन पैनल।'
+      : 'Restricted administration console for clinic doctors, staff, appointments, reports, and settings.';
   }
 
   let jsonLd: Record<string, unknown> | null = null;

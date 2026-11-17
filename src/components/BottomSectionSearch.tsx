@@ -182,6 +182,16 @@ export function BottomSectionSearch() {
         keywords: 'about hospital clinic standards mission हमारे बारे में मानक',
         action: () => navigate('/about'),
       },
+      {
+        id: 'page-admin',
+        category: 'page',
+        titleEn: 'Clinic Admin Panel',
+        titleHi: 'क्लिनिक एडमिन पैनल',
+        subtitleEn: 'Console · Manage doctors, appointments, staff, inquiries, reports & SEO',
+        subtitleHi: 'कंसोल · चिकित्सक, अपॉइंटमेंट, स्टाफ, पूछताछ, रिपोर्ट एवं SEO प्रबंधन',
+        keywords: 'admin panel dashboard settings staff doctors inquiries audit seo एडमिन पैनल डैशबोर्ड',
+        action: () => navigate('/admin'),
+      },
     ];
 
     const deptEntries: SearchEntry[] = specializations.map((spec) => ({
@@ -327,7 +337,7 @@ export function BottomSectionSearch() {
                   type="button"
                   onClick={() => setQuery('')}
                   aria-label={isHi ? 'खोज साफ़ करें' : 'Clear search'}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-white rounded-md"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 inline-flex items-center justify-center text-slate-300 hover:text-white rounded-lg"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>
@@ -422,7 +432,7 @@ export function BottomSectionSearch() {
                   key={shortcut.label}
                   type="button"
                   onClick={shortcut.onClick}
-                  className="min-h-[34px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-white/8 hover:bg-white/15 border border-white/15 rounded-lg transition-colors cursor-pointer"
+                  className="min-h-[40px] sm:min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 hover:text-white bg-white/8 hover:bg-white/15 border border-white/15 rounded-lg transition-colors cursor-pointer"
                 >
                   <Icon className="w-3.5 h-3.5 text-[#7DD3FC]" aria-hidden="true" />
                   <span>{shortcut.label}</span>

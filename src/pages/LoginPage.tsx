@@ -358,13 +358,22 @@ export function LoginPage() {
                 ? 'खाते से जुड़ी सहायता के लिए कृपया हमारे रिसेप्शन डेस्क से संपर्क करें।'
                 : 'Contact our clinic reception desk during outpatient hours for account or scheduling help.'}
             </p>
-            <button
-              type="button"
-              onClick={() => navigate('/contact')}
-              className="text-xs font-semibold text-[#1C7ED6] hover:text-[#1868B2] hover:underline pt-0.5"
-            >
-              {t.nav.contact} →
-            </button>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => navigate('/contact')}
+                className="text-xs font-semibold text-[#1C7ED6] hover:text-[#1868B2] hover:underline py-1"
+              >
+                {t.nav.contact} →
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/admin')}
+                className="text-xs font-semibold text-[#0B2D52] hover:text-[#1C7ED6] hover:underline py-1"
+              >
+                {language === 'hi' ? 'एडमिन पैनल लॉगिन →' : 'Admin Panel Sign In →'}
+              </button>
+            </div>
           </div>
         </aside>
       </div>

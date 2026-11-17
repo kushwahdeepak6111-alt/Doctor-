@@ -67,12 +67,14 @@ export function AboutPage() {
 
       <section className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-14 lg:py-20 space-y-16">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-          <div className="lg:col-span-6 rounded-2xl overflow-hidden border border-[#E2EAF2] aspect-[16/10] bg-[#F4F8FC]">
+          <div className="lg:col-span-6 rounded-2xl overflow-hidden border border-[#E2EAF2] shadow-xs aspect-[16/10] bg-[#F4F8FC]">
             <img
-              src={CLINIC_IMAGES.facility_interior}
+              src={CLINIC_IMAGES.consultation_suite}
               alt={language === 'hi' ? 'परामर्श कक्ष' : 'Clinic consultation suite'}
+              loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-center"
             />
           </div>
           <div className="lg:col-span-6 space-y-5">

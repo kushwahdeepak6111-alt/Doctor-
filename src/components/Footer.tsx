@@ -5,8 +5,8 @@ import { useT } from '../i18n/translations';
 import { ClinicLogo } from './ClinicLogo';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { WhatsAppIcon } from './WhatsAppIcon';
-import { BottomSectionSearch } from './BottomSectionSearch';
 import { getPhoneCallHref, getWhatsAppHref } from '../lib/contactLinks';
+import { prefetchRoute } from '../lib/routePrefetch';
 
 export function Footer() {
   const { language, navigate, specializations, settings } = useClinic();
@@ -14,7 +14,6 @@ export function Footer() {
 
   return (
     <footer className="bg-[#071A30] text-white border-t border-[#0E2F54]">
-      <BottomSectionSearch />
       <div className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 lg:py-14">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
           {/* Brand Column */}
@@ -44,11 +43,15 @@ export function Footer() {
                   { path: '/about', label: t.nav.about },
                   { path: '/faq', label: t.nav.faq },
                   { path: '/contact', label: t.nav.contact },
+                  { path: '/admin', label: language === 'hi' ? 'एडमिन पैनल' : 'Admin Panel' },
                 ].map((link) => (
                   <li key={link.path}>
                     <button
                       type="button"
                       onClick={() => navigate(link.path)}
+                      onMouseEnter={() => prefetchRoute(link.path)}
+                      onFocus={() => prefetchRoute(link.path)}
+                      onTouchStart={() => prefetchRoute(link.path)}
                       className="py-1 text-left hover:text-white transition-colors"
                     >
                       {link.label}
@@ -68,6 +71,9 @@ export function Footer() {
                     <button
                       type="button"
                       onClick={() => navigate('/specializations')}
+                      onMouseEnter={() => prefetchRoute('/specializations')}
+                      onFocus={() => prefetchRoute('/specializations')}
+                      onTouchStart={() => prefetchRoute('/specializations')}
                       className="py-1 text-left hover:text-white transition-colors"
                     >
                       {language === 'hi' ? spec.nameHi : spec.name}

@@ -39,7 +39,7 @@ export function ThemeSwitcher({ variant = 'compact' }: ThemeSwitcherProps) {
               type="button"
               onClick={() => setThemeMode(opt.mode)}
               aria-pressed={active}
-              className={`min-h-[34px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[40px] sm:min-h-[36px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 active
                   ? 'bg-[#1C7ED6] text-white shadow-xs'
                   : 'text-slate-300 hover:text-white hover:bg-white/10'

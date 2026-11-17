@@ -43,6 +43,7 @@ export function DoctorCard({
             src={resolveClinicImage(doctor.imageKey)}
             alt={name}
             loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full h-full object-cover object-top transition-transform duration-300 group-hover:scale-[1.02]"
