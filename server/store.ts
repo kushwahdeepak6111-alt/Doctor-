@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import type {
   Appointment,
@@ -16,6 +17,7 @@ import type {
   WaitlistNotificationLog,
   WeeklySchedule,
 } from '../src/types/clinic.ts';
+import { hydrateDbFromSupabase, isSupabaseConfigured, scheduleSupabaseSync } from './supabase.ts';
 
 export interface StoredUser extends UserProfile {
   passwordHash: string;
@@ -35,7 +37,10 @@ export interface ClinicDatabase {
   auditLogs: AuditLogEntry[];
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+const IS_SERVERLESS = Boolean(process.env.NETLIFY || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const DATA_DIR = IS_SERVERLESS
+  ? path.join(os.tmpdir(), 'arogya-clinic-data')
+  : path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'clinic-db.json');
 
 export function hashPassword(password: string, salt?: string): string {
@@ -585,7 +590,7 @@ export function readDb(): ClinicDatabase {
     }
     if (!fs.existsSync(DB_FILE)) {
       const initial = createInitialDatabase();
-      writeDb(initial);
+      writeDbLocalOnly(initial);
       cachedDb = initial;
       return initial;
     }
@@ -600,7 +605,7 @@ export function readDb(): ClinicDatabase {
   }
 }
 
-export function writeDb(db: ClinicDatabase): void {
+function writeDbLocalOnly(db: ClinicDatabase): void {
   cachedDb = db;
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -612,6 +617,31 @@ export function writeDb(db: ClinicDatabase): void {
   } catch (err) {
     console.warn('Could not persist clinic DB to disk; keeping in-memory state:', err);
   }
+}
+
+export function writeDb(db: ClinicDatabase): void {
+  writeDbLocalOnly(db);
+  scheduleSupabaseSync(db);
+}
+
+let initStorePromise: Promise<void> | null = null;
+
+export async function initClinicStore(): Promise<void> {
+  const localDb = readDb();
+  if (!isSupabaseConfigured()) return;
+  const { db: hydrated, hydratedFromCloud } = await hydrateDbFromSupabase(localDb);
+  if (hydratedFromCloud) {
+    writeDbLocalOnly(ensureCollections(hydrated));
+  }
+}
+
+export function ensureClinicStoreReady(): Promise<void> {
+  if (!initStorePromise) {
+    initStorePromise = initClinicStore().catch((err) => {
+      console.warn('Clinic store initialization warning:', err);
+    });
+  }
+  return initStorePromise;
 }
 
 export function sanitizeUser(user: StoredUser): UserProfile {

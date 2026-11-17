@@ -35,6 +35,7 @@ export function HeroSection() {
               ? 'आरोग्य मल्टी-स्पेशलिटी क्लिनिक की विशेषज्ञ चिकित्सक टीम'
               : 'Specialist physicians at Arogya Multi-Specialty Clinic'
           }
+          loading="eager"
           fetchPriority="high"
           decoding="async"
           referrerPolicy="no-referrer"

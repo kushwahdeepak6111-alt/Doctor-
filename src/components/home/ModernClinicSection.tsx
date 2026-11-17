@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
 import { CLINIC_IMAGES } from '../../lib/clinicImages';
+import { prefetchRoute } from '../../lib/routePrefetch';
 
 export function ModernClinicSection() {
   const { language, navigate } = useClinic();
@@ -27,6 +28,9 @@ export function ModernClinicSection() {
             <button
               type="button"
               onClick={() => navigate('/about')}
+              onMouseEnter={() => prefetchRoute('/about')}
+              onFocus={() => prefetchRoute('/about')}
+              onTouchStart={() => prefetchRoute('/about')}
               className="min-h-[44px] inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-full transition-colors"
             >
               <span>{language === 'hi' ? 'अधिक जानें' : 'Learn More'}</span>

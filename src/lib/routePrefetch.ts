@@ -40,4 +40,8 @@ export function warmPrimaryRoutes(): void {
   prefetchRoute('/doctors');
   prefetchRoute('/specializations');
   prefetchRoute('/book');
+  prefetchRoute('/about');
+  prefetchRoute('/faq');
+  prefetchRoute('/contact');
+  prefetchRoute('/admin');
 }

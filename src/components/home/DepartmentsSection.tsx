@@ -3,6 +3,7 @@ import { ArrowRight, CalendarCheck2 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
 import { SpecializationIcon } from '../SpecializationIcon';
+import { prefetchRoute } from '../../lib/routePrefetch';
 
 export function DepartmentsSection() {
   const { language, navigate, specializations, startBookingWith } = useClinic();
@@ -28,6 +29,9 @@ export function DepartmentsSection() {
               <button
                 type="button"
                 onClick={() => navigate('/specializations')}
+                onMouseEnter={() => prefetchRoute('/specializations')}
+                onFocus={() => prefetchRoute('/specializations')}
+                onTouchStart={() => prefetchRoute('/specializations')}
                 className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-full transition-colors whitespace-nowrap"
               >
                 <span>{t.specializationsSection.viewAll}</span>
@@ -45,6 +49,9 @@ export function DepartmentsSection() {
                   key={spec.id}
                   type="button"
                   onClick={() => startBookingWith({ specializationId: spec.id })}
+                  onMouseEnter={() => prefetchRoute('/book')}
+                  onFocus={() => prefetchRoute('/book')}
+                  onTouchStart={() => prefetchRoute('/book')}
                   className="text-left bg-white border border-[#E2EAF2] hover:border-[#1C7ED6] rounded-2xl p-5 space-y-3 shadow-xs hover:shadow-md transition-all group"
                 >
                   <div className="w-10 h-10 rounded-xl bg-[#EAF3FC] text-[#1C7ED6] group-hover:bg-[#1C7ED6] group-hover:text-white flex items-center justify-center transition-colors">
@@ -64,6 +71,9 @@ export function DepartmentsSection() {
             <button
               type="button"
               onClick={() => navigate('/book')}
+              onMouseEnter={() => prefetchRoute('/book')}
+              onFocus={() => prefetchRoute('/book')}
+              onTouchStart={() => prefetchRoute('/book')}
               className="text-left bg-[#EAF3FC] border border-[#C5DDF8] hover:border-[#1C7ED6] rounded-2xl p-5 flex flex-col justify-between gap-3 transition-colors"
             >
               <div className="w-10 h-10 rounded-xl bg-[#1C7ED6] text-white flex items-center justify-center">

@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
 import { DoctorCard } from '../DoctorCard';
+import { prefetchRoute } from '../../lib/routePrefetch';
 
 export function ExpertDoctorsSection() {
   const { language, navigate, doctors } = useClinic();
@@ -28,6 +29,9 @@ export function ExpertDoctorsSection() {
           <button
             type="button"
             onClick={() => navigate('/doctors')}
+            onMouseEnter={() => prefetchRoute('/doctors')}
+            onFocus={() => prefetchRoute('/doctors')}
+            onTouchStart={() => prefetchRoute('/doctors')}
             className="self-start sm:self-auto min-h-[42px] inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-full transition-colors whitespace-nowrap shrink-0"
           >
             <span>{t.doctorsSection.viewAll}</span>
