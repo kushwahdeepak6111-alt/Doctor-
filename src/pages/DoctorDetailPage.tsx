@@ -60,7 +60,7 @@ export function DoctorDetailPage({ slug }: { slug: string }) {
             <div className="aspect-[3/4] rounded-2xl overflow-hidden border border-[#E2EAF2] shadow-xs bg-[#F4F8FC]">
               {!imgError ? (
                 <img
-                  src={resolveClinicImage(doctor.imageKey)}
+                  src={doctor.photo || resolveClinicImage(doctor.imageKey)}
                   alt={name}
                   decoding="async"
                   referrerPolicy="no-referrer"
@@ -79,7 +79,13 @@ export function DoctorDetailPage({ slug }: { slug: string }) {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#5C6F84]">{t.doctorsSection.feeLabel}</span>
                 <span className="font-mono font-bold text-[#0B2D52] tabular-nums">
-                  ₹{doctor.consultationFee}
+                  ₹{doctor.fees || doctor.consultationFee}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-sm pt-2 border-t border-[#E2EAF2]">
+                <span className="text-[#5C6F84]">{language === 'hi' ? 'रेटिंग' : 'Patient Rating'}</span>
+                <span className="font-mono font-bold text-amber-600 tabular-nums">
+                  ★ {doctor.rating.toFixed(1)}
                 </span>
               </div>
               <div className="flex items-center justify-between text-sm pt-2 border-t border-[#E2EAF2]">
@@ -102,7 +108,9 @@ export function DoctorDetailPage({ slug }: { slug: string }) {
           {/* Details & Schedule Column */}
           <div className="lg:col-span-8 space-y-8">
             <div className="space-y-3 pb-6 border-b border-[#E2EAF2]">
-              <p className="text-xs font-semibold text-[#1C7ED6]">{specName}</p>
+              <p className="text-xs font-semibold text-[#1C7ED6]">
+                {language === 'hi' ? doctor.specialityHi || specName : doctor.speciality || specName}
+              </p>
               <h1 className="font-display text-3xl sm:text-4xl font-bold text-[#0B2D52]">
                 {name}
               </h1>
@@ -113,6 +121,10 @@ export function DoctorDetailPage({ slug }: { slug: string }) {
                 </span>
                 <span aria-hidden="true">·</span>
                 <span>{summary}</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-medium text-[#0B2D52]">
+                  {language === 'hi' ? doctor.timingHi || doctor.timing : doctor.timing}
+                </span>
                 <span aria-hidden="true">·</span>
                 <span className="inline-flex items-center gap-1.5">
                   <Globe2 className="w-4 h-4 text-[#1C7ED6]" aria-hidden="true" />

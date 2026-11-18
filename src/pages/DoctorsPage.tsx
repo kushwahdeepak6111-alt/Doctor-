@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, Filter, RotateCcw, Search } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { DoctorCard } from '../components/DoctorCard';
-import type { DoctorSearchResult, WeekdayKey } from '../types/clinic';
+import { searchDoctorsStatic } from '../data/clinicData';
+import type { WeekdayKey } from '../types/clinic';
 
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export function DoctorsPage() {
-  const { language, specializations, navigate } = useClinic();
+  const { language, doctors, specializations, navigate } = useClinic();
   const t = useT(language);
   const isHi = language === 'hi';
 
@@ -22,43 +23,19 @@ export function DoctorsPage() {
   });
   const [dayFilter, setDayFilter] = useState<WeekdayKey | ''>('');
   const [dateFilter, setDateFilter] = useState('');
-  const [results, setResults] = useState<DoctorSearchResult[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      setLoading(true);
-      setError('');
-      const params = new URLSearchParams();
-      if (search.trim()) params.set('q', search.trim());
-      if (specFilter && specFilter !== 'all') params.set('specializationId', specFilter);
-      if (dayFilter) params.set('day', dayFilter);
-      if (dateFilter) params.set('date', dateFilter);
-
-      fetch(`/api/doctors/search?${params.toString()}`, {
-        signal: controller.signal,
-      })
-        .then(async (res) => {
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Failed to search doctors');
-          setResults(Array.isArray(data.results) ? data.results : []);
-        })
-        .catch((err) => {
-          if (err instanceof DOMException && err.name === 'AbortError') return;
-          setError(err instanceof Error ? err.message : 'Unable to load doctors');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }, 150);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [search, specFilter, dayFilter, dateFilter]);
+  const results = useMemo(
+    () =>
+      searchDoctorsStatic({
+        doctors,
+        specializations,
+        q: search,
+        specializationId: specFilter,
+        day: dayFilter,
+        date: dateFilter,
+      }),
+    [doctors, specializations, search, specFilter, dayFilter, dateFilter]
+  );
 
   const hasActiveFilters = Boolean(
     search.trim() || specFilter !== 'all' || dayFilter || dateFilter
@@ -180,15 +157,11 @@ export function DoctorsPage() {
       <section className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#5C6F84]">
           <span>
-            {loading
-              ? isHi
-                ? 'उपलब्ध चिकित्सकों की खोज की जा रही है...'
-                : 'Searching live clinic roster...'
-              : isHi
-                ? `${results.length} विशेषज्ञ चिकित्सक मिले`
-                : `Showing ${results.length} specialist${results.length === 1 ? '' : 's'}`}
+            {isHi
+              ? `${results.length} विशेषज्ञ चिकित्सक मिले`
+              : `Showing ${results.length} specialist${results.length === 1 ? '' : 's'}`}
           </span>
-          {dateFilter && !loading && (
+          {dateFilter && (
             <span className="font-medium text-[#0B2D52]">
               {isHi
                 ? `तिथि ${dateFilter} पर सत्यापित उपलब्धता`
@@ -197,18 +170,7 @@ export function DoctorsPage() {
           )}
         </div>
 
-        {error ? (
-          <div className="border border-rose-200 rounded-2xl p-8 text-center space-y-3 bg-rose-50 text-rose-900">
-            <p className="text-sm font-semibold">{error}</p>
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#0B2D52] rounded-lg cursor-pointer"
-            >
-              {isHi ? 'पुनः प्रयास करें' : 'Reset Search'}
-            </button>
-          </div>
-        ) : !loading && results.length === 0 ? (
+        {results.length === 0 ? (
           <div className="border border-[#E2EAF2] rounded-2xl p-10 text-center space-y-3 bg-[#F4F8FC]">
             <p className="font-display text-lg font-bold text-[#0B2D52]">
               {isHi ? 'इस खोज के अनुसार कोई चिकित्सक उपलब्ध नहीं है' : 'No specialists match these filters'}
@@ -216,8 +178,8 @@ export function DoctorsPage() {
             <p className="text-sm text-[#5C6F84] max-w-md mx-auto">
               {dateFilter
                 ? isHi
-                  ? 'चयनित तिथि पर कोई खाली स्लॉट नहीं मिला। कृपया अन्य तिथि आज़माएँ या बुकिंग पृष्ठ से प्रतीक्षा सूची में जुड़ें।'
-                  : 'No open appointment slots were found on that date. Try clearing the date filter or joining the waitlist during booking.'
+                  ? 'चयनित तिथि पर कोई खाली स्लॉट नहीं मिला। कृपया अन्य तिथि आज़माएँ या बुकिंग पृष्ठ पर जाएं।'
+                  : 'No open appointment slots were found on that date. Try clearing the date filter or choosing another weekday.'
                 : isHi
                   ? 'कृपया खोज शब्द बदलें या सभी फ़िल्टर रीसेट करें।'
                   : 'Try adjusting your search keywords, specialization, or day filter.'}
@@ -235,7 +197,7 @@ export function DoctorsPage() {
                 onClick={() => navigate('/book')}
                 className="min-h-[40px] px-4 py-2 text-xs font-semibold text-[#0B2D52] bg-white border border-[#CBD5E1] rounded-lg cursor-pointer"
               >
-                {isHi ? 'अपॉइंटमेंट / प्रतीक्षा सूची' : 'Go to Appointment Booking'}
+                {isHi ? 'अपॉइंटमेंट बुक करें' : 'Go to Appointment Booking'}
               </button>
             </div>
           </div>

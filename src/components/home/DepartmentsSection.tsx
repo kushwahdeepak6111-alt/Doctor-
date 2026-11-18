@@ -67,27 +67,28 @@ export function DepartmentsSection() {
               );
             })}
 
-            {/* 6th Quick Action Card to Complete Balanced 3x2 Grid */}
-            <button
-              type="button"
-              onClick={() => navigate('/book')}
-              onMouseEnter={() => prefetchRoute('/book')}
-              onFocus={() => prefetchRoute('/book')}
-              onTouchStart={() => prefetchRoute('/book')}
-              className="text-left bg-[#EAF3FC] border border-[#C5DDF8] hover:border-[#1C7ED6] rounded-2xl p-5 flex flex-col justify-between gap-3 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-xl bg-[#1C7ED6] text-white flex items-center justify-center">
-                <CalendarCheck2 className="w-5 h-5" aria-hidden="true" />
-              </div>
-              <div>
-                <h3 className="font-display text-sm font-bold text-[#0B2D52]">
-                  {language === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Schedule Consultation'}
-                </h3>
-                <p className="text-xs text-[#195392] mt-1">
-                  {language === 'hi' ? 'उपलब्ध समय स्लॉट चुनें →' : 'Choose specialist & time slot →'}
-                </p>
-              </div>
-            </button>
+            {specializations.length < 6 && (
+              <button
+                type="button"
+                onClick={() => navigate('/book')}
+                onMouseEnter={() => prefetchRoute('/book')}
+                onFocus={() => prefetchRoute('/book')}
+                onTouchStart={() => prefetchRoute('/book')}
+                className="text-left bg-[#EAF3FC] border border-[#C5DDF8] hover:border-[#1C7ED6] rounded-2xl p-5 flex flex-col justify-between gap-3 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#1C7ED6] text-white flex items-center justify-center">
+                  <CalendarCheck2 className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="font-display text-sm font-bold text-[#0B2D52]">
+                    {language === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Schedule Consultation'}
+                  </h3>
+                  <p className="text-xs text-[#195392] mt-1">
+                    {language === 'hi' ? 'उपलब्ध समय स्लॉट चुनें →' : 'Choose specialist & time slot →'}
+                  </p>
+                </div>
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -12,18 +13,20 @@ import {
   FileUp,
   Loader2,
   Trash2,
+  X,
 } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
-import { apiFetch } from '../lib/authFetch';
+import { computeDoctorSlotsStatic, saveLocalAppointment } from '../data/clinicData';
 import { useT } from '../i18n/translations';
 import { resolveClinicImage } from '../lib/clinicImages';
+import { buildBookingWhatsAppHref } from '../lib/contactLinks';
 import { AppointmentSlipModal } from '../components/AppointmentSlipModal';
 import { SpecializationIcon } from '../components/SpecializationIcon';
 import { StatusIndicator } from '../components/StatusIndicator';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import type {
   Appointment,
   AppointmentDocument,
-  AvailabilitySlot,
   NotificationChannel,
   WaitlistTimeRange,
 } from '../types/clinic';
@@ -57,9 +60,6 @@ export function BookingPage() {
   } = useClinic();
   const t = useT(language);
 
-  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
-  const [slotsLoading, setSlotsLoading] = useState(false);
-  const [slotsError, setSlotsError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{
@@ -69,15 +69,16 @@ export function BookingPage() {
     reason?: string;
   }>({});
   const [submittedAppt, setSubmittedAppt] = useState<Appointment | null>(null);
+  const [whatsappUrl, setWhatsappUrl] = useState('');
+  const [successPopupOpen, setSuccessPopupOpen] = useState(false);
   const [slipModalOpenId, setSlipModalOpenId] = useState<string | null>(null);
 
-  // Smart Waitlist form state (Step 4)
+  // Smart Waitlist form state (Step 4 - local demo state)
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEndDate, setWaitlistEndDate] = useState('');
   const [waitlistTimeRange, setWaitlistTimeRange] = useState<WaitlistTimeRange>('any');
-  const [waitlistChannel, setWaitlistChannel] = useState<NotificationChannel>('in_app');
+  const [waitlistChannel, setWaitlistChannel] = useState<NotificationChannel>('whatsapp');
   const [waitlistConsent, setWaitlistConsent] = useState(true);
-  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistDoneId, setWaitlistDoneId] = useState<string | null>(null);
 
   const upcomingDates = useMemo(() => buildNext14Days(), []);
@@ -91,38 +92,12 @@ export function BookingPage() {
   );
   const selectedDoctor = doctors.find((d) => d.id === bookingDraft.doctorId);
 
-  // Fetch live slot availability whenever doctor or date changes
-  useEffect(() => {
-    if (!bookingDraft.doctorId || !bookingDraft.date) {
-      setSlots([]);
-      return;
-    }
-    let active = true;
-    setSlotsLoading(true);
-    setSlotsError(false);
-    fetch(
-      `/api/availability?doctorId=${encodeURIComponent(bookingDraft.doctorId)}&date=${encodeURIComponent(bookingDraft.date)}`
-    )
-      .then((res) => {
-        if (!res.ok) throw new Error('Availability request failed');
-        return res.json();
-      })
-      .then((data: { slots?: AvailabilitySlot[] }) => {
-        if (!active) return;
-        setSlots(data.slots || []);
-      })
-      .catch(() => {
-        if (!active) return;
-        setSlots([]);
-        setSlotsError(true);
-      })
-      .finally(() => {
-        if (active) setSlotsLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [bookingDraft.doctorId, bookingDraft.date]);
+  const slotsLoading = false;
+  const slotsError = false;
+  const slots = useMemo(() => {
+    if (!selectedDoctor || !bookingDraft.date) return [];
+    return computeDoctorSlotsStatic(selectedDoctor, bookingDraft.date);
+  }, [selectedDoctor, bookingDraft.date]);
 
   const setStep = (step: number) => {
     setErrorMsg('');
@@ -207,96 +182,101 @@ export function BookingPage() {
     setStep(6);
   };
 
-  const handleSubmitBooking = async () => {
-    setErrorMsg('');
-    setSubmitting(true);
-    try {
-      const res = await apiFetch('/api/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          specializationId: bookingDraft.specializationId,
-          doctorId: bookingDraft.doctorId,
-          date: bookingDraft.date,
-          timeSlot: bookingDraft.timeSlot,
-          patientName: bookingDraft.patientName.trim(),
-          patientPhone: bookingDraft.patientPhone.trim(),
-          patientEmail: bookingDraft.patientEmail.trim(),
-          reason: bookingDraft.reason.trim(),
-          documents: bookingDraft.documents,
-          waitlistId: bookingDraft.waitlistId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || 'Unable to submit booking request.');
-        if (res.status === 409) {
-          setBookingDraft((prev) => ({ ...prev, timeSlot: '', step: 4 }));
-        }
-        return;
-      }
-      setSubmittedAppt(data.appointment);
-      setStep(8);
-      addToast(
-        language === 'hi'
-          ? 'अपॉइंटमेंट अनुरोध सफलतापूर्वक भेजा गया।'
-          : 'Appointment request submitted.',
-        'success'
-      );
-    } catch {
-      setErrorMsg(
-        language === 'hi'
-          ? 'नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।'
-          : 'Network error while submitting request. Please try again.'
-      );
-    } finally {
-      setSubmitting(false);
-    }
+  const openWhatsAppTab = (url: string) => {
+    if (!url || typeof document === 'undefined') return;
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
-  const handleJoinWaitlist = async (e: React.FormEvent) => {
+  const handleSubmitBooking = () => {
+    setErrorMsg('');
+    if (!selectedDoctor || !bookingDraft.date || !bookingDraft.timeSlot) {
+      setErrorMsg(
+        language === 'hi'
+          ? 'कृपया चिकित्सक, तिथि और समय स्लॉट चुनें।'
+          : 'Please select a doctor, date, and time slot.'
+      );
+      return;
+    }
+
+    setSubmitting(true);
+    const nowIso = new Date().toISOString();
+    const referenceCode = `ARG-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const newAppt: Appointment = {
+      id: `appt-${Date.now()}`,
+      referenceCode,
+      patientId: user?.id || null,
+      patientName: bookingDraft.patientName.trim(),
+      patientPhone: bookingDraft.patientPhone.trim(),
+      patientEmail: bookingDraft.patientEmail.trim(),
+      doctorId: selectedDoctor.id,
+      specializationId: bookingDraft.specializationId || selectedDoctor.specializationId,
+      date: bookingDraft.date,
+      timeSlot: bookingDraft.timeSlot,
+      reason: bookingDraft.reason.trim(),
+      status: 'confirmed',
+      documents: bookingDraft.documents,
+      clinicNotes:
+        language === 'hi'
+          ? 'व्हाट्सएप बुकिंग विवरण तैयार।'
+          : 'WhatsApp booking details generated.',
+      createdByRole: user?.role || 'guest',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    const waUrl = buildBookingWhatsAppHref({
+      clinicPhone: settings?.phone,
+      language,
+      referenceCode,
+      doctorName: language === 'hi' ? selectedDoctor.nameHi : selectedDoctor.name,
+      speciality:
+        language === 'hi'
+          ? selectedDoctor.specialityHi || selectedSpec?.nameHi || selectedDoctor.speciality
+          : selectedDoctor.speciality || selectedSpec?.name || '',
+      date: newAppt.date,
+      timeSlot: newAppt.timeSlot,
+      fees: selectedDoctor.fees || selectedDoctor.consultationFee,
+      patientName: newAppt.patientName,
+      patientPhone: newAppt.patientPhone,
+      patientEmail: newAppt.patientEmail,
+      reason: newAppt.reason,
+    });
+
+    saveLocalAppointment(newAppt);
+    setSubmittedAppt(newAppt);
+    setWhatsappUrl(waUrl);
+    setSuccessPopupOpen(true);
+    setStep(8);
+    setSubmitting(false);
+
+    addToast(
+      language === 'hi'
+        ? 'अपॉइंटमेंट सफलतापूर्वक तैयार! व्हाट्सएप खुल रहा है...'
+        : 'Booking confirmed! Opening WhatsApp with your booking details.',
+      'success'
+    );
+
+    openWhatsAppTab(waUrl);
+  };
+
+  const handleJoinWaitlist = (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingDraft.doctorId || !bookingDraft.date) return;
     setErrorMsg('');
-    setWaitlistSubmitting(true);
-    try {
-      const res = await apiFetch('/api/waitlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          doctorId: bookingDraft.doctorId,
-          specializationId: bookingDraft.specializationId,
-          preferredDate: bookingDraft.date,
-          preferredEndDate: waitlistEndDate || undefined,
-          preferredTimeRange: waitlistTimeRange,
-          notificationPreference: waitlistChannel,
-          consentToNotify: waitlistConsent,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data.error || 'Unable to join waitlist');
-        return;
-      }
-      setWaitlistDoneId(data.entry?.id || 'joined');
-      setWaitlistOpen(false);
-      addToast(
-        language === 'hi'
-          ? 'आपको अपॉइंटमेंट प्रतीक्षा सूची में जोड़ दिया गया है।'
-          : 'You have been added to the appointment waitlist.',
-        'success'
-      );
-    } catch {
-      setErrorMsg(
-        language === 'hi'
-          ? 'प्रतीक्षा सूची में जुड़ते समय नेटवर्क त्रुटि हुई।'
-          : 'Network error while joining waitlist.'
-      );
-    } finally {
-      setWaitlistSubmitting(false);
-    }
+    setWaitlistDoneId(`wait-${Date.now()}`);
+    setWaitlistOpen(false);
+    addToast(
+      language === 'hi'
+        ? 'आपको अपॉइंटमेंट प्रतीक्षा सूची में जोड़ दिया गया है।'
+        : 'Added to appointment waitlist (demo).',
+      'success'
+    );
   };
 
   const activeStep = submittedAppt ? 8 : bookingDraft.step;
@@ -508,7 +488,7 @@ export function BookingPage() {
                         }`}
                       >
                         <img
-                          src={resolveClinicImage(doc.imageKey)}
+                          src={doc.photo || resolveClinicImage(doc.imageKey)}
                           alt={language === 'hi' ? doc.nameHi : doc.name}
                           className="w-16 h-20 rounded-lg object-cover object-top shrink-0 bg-[#F4F8FC]"
                         />
@@ -517,10 +497,10 @@ export function BookingPage() {
                             {language === 'hi' ? doc.nameHi : doc.name}
                           </h3>
                           <p className="text-xs text-[#5C6F84] truncate">
-                            {language === 'hi' ? doc.qualificationHi : doc.qualification}
+                            {language === 'hi' ? doc.specialityHi || doc.qualificationHi : doc.speciality || doc.qualification}
                           </p>
                           <p className="text-xs font-mono font-semibold text-[#1C7ED6] tabular-nums">
-                            ₹{doc.consultationFee} · {(language === 'hi' ? doc.languagesHi : doc.languages).join(', ')}
+                            ₹{doc.fees || doc.consultationFee} · ★ {doc.rating.toFixed(1)} · {(language === 'hi' ? doc.languagesHi : doc.languages).join(', ')}
                           </p>
                         </div>
                       </button>
@@ -846,16 +826,12 @@ export function BookingPage() {
 
                     <button
                       type="submit"
-                      disabled={waitlistSubmitting || !waitlistConsent}
+                      disabled={!waitlistConsent}
                       className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] disabled:opacity-60 rounded-lg cursor-pointer"
                     >
-                      {waitlistSubmitting
-                        ? language === 'hi'
-                          ? 'दर्ज हो रहा है...'
-                          : 'Joining Waitlist...'
-                        : language === 'hi'
-                          ? 'प्रतीक्षा सूची अनुरोध दर्ज करें'
-                          : 'Confirm Waitlist Request'}
+                      {language === 'hi'
+                        ? 'प्रतीक्षा सूची अनुरोध दर्ज करें'
+                        : 'Confirm Waitlist Request'}
                     </button>
                   </form>
                 )}
@@ -1114,7 +1090,7 @@ export function BookingPage() {
                 <div>
                   <dt className="text-xs text-[#5C6F84]">{t.doctorsSection.feeLabel}</dt>
                   <dd className="font-mono font-semibold text-[#0B2D52] mt-0.5 tabular-nums">
-                    ₹{selectedDoctor?.consultationFee || 800}
+                    ₹{selectedDoctor?.fees || selectedDoctor?.consultationFee || 800}
                   </dd>
                 </div>
                 <div>
@@ -1209,38 +1185,41 @@ export function BookingPage() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-                {user && (
-                  <button
-                    type="button"
-                    onClick={() => setSlipModalOpenId(submittedAppt.id)}
-                    className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-xl cursor-pointer"
+                {whatsappUrl && (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#128C7E] hover:bg-[#0F766A] rounded-xl cursor-pointer transition-colors"
                   >
-                    <FileText className="w-4 h-4" aria-hidden="true" />
+                    <WhatsAppIcon className="w-4 h-4 shrink-0" />
                     <span>
-                      {submittedAppt.status === 'pending'
-                        ? language === 'hi'
-                          ? 'अनुरोध रसीद / PDF देखें'
-                          : 'View Request Receipt & PDF'
-                        : language === 'hi'
-                          ? 'कन्फर्मेशन स्लिप / PDF'
-                          : 'View Confirmation Slip & PDF'}
+                      {language === 'hi'
+                        ? 'व्हाट्सएप पर विवरण भेजें'
+                        : 'Open WhatsApp Booking'}
                     </span>
-                  </button>
+                  </a>
                 )}
                 <button
                   type="button"
-                  onClick={() => navigate(user ? '/portal' : '/login')}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-xl"
+                  onClick={() => setSlipModalOpenId(submittedAppt.id)}
+                  className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-xl cursor-pointer"
                 >
-                  {t.booking.viewPortalCta}
+                  <FileText className="w-4 h-4" aria-hidden="true" />
+                  <span>
+                    {language === 'hi'
+                      ? 'कन्फर्मेशन स्लिप / PDF'
+                      : 'View Slip & PDF'}
+                  </span>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setSubmittedAppt(null);
+                    setSuccessPopupOpen(false);
                     resetBookingDraft();
                   }}
-                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold text-[#0B2D52] bg-[#F4F8FC] border border-[#E2EAF2] rounded-xl"
+                  className="min-h-[44px] px-5 py-2.5 text-sm font-semibold text-[#0B2D52] bg-[#F4F8FC] border border-[#E2EAF2] rounded-xl cursor-pointer"
                 >
                   {t.booking.bookAnotherCta}
                 </button>
@@ -1250,8 +1229,125 @@ export function BookingPage() {
         </div>
       </div>
 
+      {/* Booking Success Popup Modal */}
+      {successPopupOpen && submittedAppt && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="booking-success-modal-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 overflow-y-auto"
+            >
+              <div className="w-full max-w-md rounded-2xl border border-[#E2EAF2] bg-white shadow-2xl overflow-hidden">
+                <div className="flex items-center justify-between gap-3 border-b border-[#E2EAF2] bg-[#F4F8FC] px-5 py-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-5 h-5" aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h2
+                        id="booking-success-modal-title"
+                        className="font-display text-base font-bold text-[#0B2D52]"
+                      >
+                        {language === 'hi'
+                          ? 'अपॉइंटमेंट बुकिंग सफल!'
+                          : 'Appointment Booking Confirmed!'}
+                      </h2>
+                      <p className="text-[11px] font-mono text-[#1C7ED6] font-semibold">
+                        {submittedAppt.referenceCode}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSuccessPopupOpen(false)}
+                    aria-label={language === 'hi' ? 'बंद करें' : 'Close'}
+                    className="rounded-lg p-1.5 text-[#5C6F84] hover:bg-white hover:text-[#0B2D52] cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <p className="text-xs text-[#5C6F84] leading-relaxed">
+                    {language === 'hi'
+                      ? 'आपका अपॉइंटमेंट विवरण तैयार है और व्हाट्सएप में भेजा जा रहा है। नीचे अपना सारांश देखें:'
+                      : 'Your booking summary is ready and formatted for WhatsApp confirmation. Review your details below:'}
+                  </p>
+
+                  <div className="rounded-xl border border-[#E2EAF2] bg-[#F8FBFF] p-4 space-y-2.5 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#5C6F84]">{language === 'hi' ? 'चिकित्सक' : 'Doctor'}</span>
+                      <span className="font-semibold text-[#0B2D52]">
+                        {selectedDoctor
+                          ? language === 'hi'
+                            ? selectedDoctor.nameHi
+                            : selectedDoctor.name
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#5C6F84]">{language === 'hi' ? 'विशेषज्ञता' : 'Speciality'}</span>
+                      <span className="font-medium text-[#1C7ED6]">
+                        {selectedDoctor
+                          ? language === 'hi'
+                            ? selectedDoctor.specialityHi || selectedDoctor.speciality
+                            : selectedDoctor.speciality
+                          : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#5C6F84]">{language === 'hi' ? 'तिथि एवं समय' : 'Date & Slot'}</span>
+                      <span className="font-mono font-semibold text-[#0B2D52] tabular-nums">
+                        {submittedAppt.date} · {submittedAppt.timeSlot}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#5C6F84]">{language === 'hi' ? 'रोगी' : 'Patient'}</span>
+                      <span className="font-medium text-[#0B2D52]">{submittedAppt.patientName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#E2EAF2]">
+                      <span className="text-[#5C6F84]">{t.doctorsSection.feeLabel}</span>
+                      <span className="font-mono font-bold text-[#0B2D52] tabular-nums">
+                        ₹{selectedDoctor?.fees || selectedDoctor?.consultationFee || 800}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 pt-1">
+                    {whatsappUrl && (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full min-h-[44px] inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-[#128C7E] hover:bg-[#0F766A] rounded-xl transition-colors"
+                      >
+                        <WhatsAppIcon className="w-4 h-4 shrink-0" />
+                        <span>
+                          {language === 'hi'
+                            ? 'व्हाट्सएप पर बुकिंग भेजें'
+                            : 'Send Booking on WhatsApp'}
+                        </span>
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSuccessPopupOpen(false)}
+                      className="w-full min-h-[42px] px-4 py-2 text-xs font-semibold text-[#0B2D52] bg-[#F4F8FC] hover:bg-[#EAF3FC] border border-[#E2EAF2] rounded-xl cursor-pointer"
+                    >
+                      {language === 'hi' ? 'रसीद और सारांश देखें' : 'Done · View Confirmation'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
       <AppointmentSlipModal
         appointmentId={slipModalOpenId}
+        appointment={submittedAppt}
         onClose={() => setSlipModalOpenId(null)}
       />
     </div>

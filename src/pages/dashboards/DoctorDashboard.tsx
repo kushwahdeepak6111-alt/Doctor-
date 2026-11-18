@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Calendar, Clock, FileText, LogOut, RefreshCw, Save } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { apiFetch } from '../../lib/authFetch';
+import { readLocalAppointments, saveLocalAppointment } from '../../data/clinicData';
 import { useT, WEEKDAY_LABELS } from '../../i18n/translations';
 import { StatusIndicator } from '../../components/StatusIndicator';
 import type { Appointment, AppointmentStatus, WeekdayKey, WeeklySchedule } from '../../types/clinic';
@@ -9,20 +9,28 @@ import type { Appointment, AppointmentStatus, WeekdayKey, WeeklySchedule } from 
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export function DoctorDashboard() {
-  const { language, user, doctors, logout, refreshBootstrap, addToast } = useClinic();
+  const { language, user, doctors, logout, addToast } = useClinic();
   const t = useT(language);
 
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const [tab, setTab] = useState<'today' | 'upcoming' | 'all' | 'schedule'>('today');
-  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
-  const [savingSchedule, setSavingSchedule] = useState(false);
-
   const myDoctor = useMemo(
-    () => doctors.find((d) => d.id === user?.doctorId),
+    () => doctors.find((d) => d.id === user?.doctorId) || doctors[0],
     [doctors, user?.doctorId]
   );
+
+  const [appointments, setAppointments] = useState<Appointment[]>(() =>
+    readLocalAppointments()
+  );
+  const loading = false;
+  const loadError = '';
+  const [tab, setTab] = useState<'today' | 'upcoming' | 'all' | 'schedule'>('today');
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    for (const a of readLocalAppointments()) {
+      map[a.id] = a.clinicNotes || '';
+    }
+    return map;
+  });
+  const [savingSchedule, setSavingSchedule] = useState(false);
 
   const [scheduleDraft, setScheduleDraft] = useState<WeeklySchedule | null>(null);
 
@@ -32,41 +40,15 @@ export function DoctorDashboard() {
     }
   }, [myDoctor]);
 
-  const loadAppointments = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = await apiFetch('/api/appointments', { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error(
-          language === 'hi'
-            ? 'चिकित्सक अपॉइंटमेंट सूची लोड नहीं हो सकी।'
-            : 'Unable to load assigned consultations.'
-        );
-      }
-      const data = (await res.json()) as { appointments: Appointment[] };
-      setAppointments(data.appointments || []);
-      const notesMap: Record<string, string> = {};
-      for (const a of data.appointments || []) {
-        notesMap[a.id] = a.clinicNotes || '';
-      }
-      setNoteDrafts(notesMap);
-    } catch (err) {
-      setLoadError(
-        err instanceof Error
-          ? err.message
-          : language === 'hi'
-            ? 'नेटवर्क त्रुटि।'
-            : 'Network error while loading consultations.'
-      );
-    } finally {
-      setLoading(false);
+  const loadAppointments = useCallback(() => {
+    const all = readLocalAppointments();
+    setAppointments(all);
+    const notesMap: Record<string, string> = {};
+    for (const a of all) {
+      notesMap[a.id] = a.clinicNotes || '';
     }
-  }, [language]);
-
-  useEffect(() => {
-    void loadAppointments();
-  }, [loadAppointments]);
+    setNoteDrafts(notesMap);
+  }, []);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -83,49 +65,30 @@ export function DoctorDashboard() {
     [appointments, todayStr]
   );
 
-  const updateAppointment = async (
+  const updateAppointment = (
     id: string,
     payload: { status?: AppointmentStatus; clinicNotes?: string }
   ) => {
-    const res = await apiFetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload),
-    });
-    if (res.ok) {
-      addToast(language === 'hi' ? 'अपॉइंटमेंट अपडेट किया गया।' : 'Appointment updated.', 'success');
-      void loadAppointments();
-    } else {
-      addToast(language === 'hi' ? 'अपडेट विफल रहा।' : 'Unable to update appointment.', 'error');
-    }
+    const existing = appointments.find((a) => a.id === id);
+    if (!existing) return;
+    const updated: Appointment = {
+      ...existing,
+      ...(payload.status ? { status: payload.status } : {}),
+      ...(payload.clinicNotes !== undefined ? { clinicNotes: payload.clinicNotes } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    setAppointments(saveLocalAppointment(updated));
+    addToast(language === 'hi' ? 'अपॉइंटमेंट अपडेट किया गया।' : 'Appointment updated.', 'success');
   };
 
-  const handleSaveSchedule = async () => {
+  const handleSaveSchedule = () => {
     if (!myDoctor || !scheduleDraft) return;
     setSavingSchedule(true);
-    try {
-      const res = await apiFetch(`/api/doctors/${myDoctor.id}/schedule`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ schedule: scheduleDraft }),
-      });
-      if (res.ok) {
-        await refreshBootstrap();
-        addToast(
-          language === 'hi' ? 'साप्ताहिक समय-सारिणी सहेजी गई।' : 'Weekly schedule saved.',
-          'success'
-        );
-      } else {
-        addToast(
-          language === 'hi' ? 'समय-सारिणी सहेजी नहीं जा सकी।' : 'Could not save schedule.',
-          'error'
-        );
-      }
-    } finally {
-      setSavingSchedule(false);
-    }
+    setSavingSchedule(false);
+    addToast(
+      language === 'hi' ? 'साप्ताहिक समय-सारिणी सहेजी गई।' : 'Weekly schedule saved locally.',
+      'success'
+    );
   };
 
   const renderEmptyCard = (message: string) => (

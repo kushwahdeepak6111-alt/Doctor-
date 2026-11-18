@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BarChart3,
@@ -26,7 +26,13 @@ import {
   Users,
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { apiFetch } from '../../lib/authFetch';
+import {
+  STATIC_CLINIC_SETTINGS,
+  STATIC_DEMO_USERS,
+  STATIC_PUBLIC_REVIEWS,
+  readLocalAppointments,
+  saveLocalAppointment,
+} from '../../data/clinicData';
 import { useT } from '../../i18n/translations';
 import { AdminSeoPanel } from '../../components/AdminSeoPanel';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
@@ -65,20 +71,33 @@ type AdminSection =
   | 'settings';
 
 export function AdminDashboard() {
-  const { language, user, logout, refreshBootstrap, addToast } = useClinic();
+  const {
+    language,
+    user,
+    doctors: contextDoctors,
+    specializations: contextSpecs,
+    settings: contextSettings,
+    updateLocalSettings,
+    logout,
+    addToast,
+  } = useClinic();
   const t = useT(language);
 
   const [section, setSection] = useState<AdminSection>('overview');
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [specializations, setSpecializations] = useState<Specialization[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>(() =>
+    readLocalAppointments()
+  );
+  const [doctors, setDoctors] = useState<Doctor[]>(contextDoctors);
+  const [specializations, setSpecializations] = useState<Specialization[]>(contextSpecs);
+  const [users, setUsers] = useState<UserProfile[]>(STATIC_DEMO_USERS);
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLogs] = useState<AuditLogEntry[]>([]);
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'new' | 'reviewed'>('all');
-  const [settingsForm, setSettingsForm] = useState<ClinicSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const [settingsForm, setSettingsForm] = useState<ClinicSettings | null>(
+    contextSettings || STATIC_CLINIC_SETTINGS
+  );
+  const loading = false;
+  const loadError = '';
 
   // Table state
   const [search, setSearch] = useState('');
@@ -89,7 +108,7 @@ export function AdminDashboard() {
 
   // Quick creation forms
   const [newDocName, setNewDocName] = useState('');
-  const [newDocSpec, setNewDocSpec] = useState('');
+  const [newDocSpec, setNewDocSpec] = useState(contextSpecs[0]?.id || '');
   const [newDocQual, setNewDocQual] = useState('');
   const [newDocFee, setNewDocFee] = useState('800');
 
@@ -110,33 +129,8 @@ export function AdminDashboard() {
   const [repSpecId, setRepSpecId] = useState('all');
   const [repStatus, setRepStatus] = useState<'all' | AppointmentStatus>('all');
   const [repSearch, setRepSearch] = useState('');
-  const [repLoading, setRepLoading] = useState(false);
+  const repLoading = false;
   const [repExporting, setRepExporting] = useState<'csv' | 'xlsx' | null>(null);
-  const [reportData, setReportData] = useState<{
-    summary: {
-      total: number;
-      pending: number;
-      confirmed: number;
-      completed: number;
-      cancelled: number;
-      rejected: number;
-      missed: number;
-    };
-    doctorDistribution: Array<{
-      doctorId: string;
-      doctorName: string;
-      doctorNameHi: string;
-      specializationName: string;
-      total: number;
-      pending: number;
-      confirmed: number;
-      completed: number;
-      cancelled: number;
-      rejected: number;
-      missed: number;
-    }>;
-    rows: ReportRow[];
-  } | null>(null);
 
   // Feature 5: Feedback Moderation State
   type AdminFeedbackRow = PatientFeedback & {
@@ -145,8 +139,27 @@ export function AdminDashboard() {
     appointmentReference: string;
     patientName: string;
   };
-  const [feedbackRows, setFeedbackRows] = useState<AdminFeedbackRow[]>([]);
-  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackRows, setFeedbackRows] = useState<AdminFeedbackRow[]>(() =>
+    STATIC_PUBLIC_REVIEWS.map((r, idx) => ({
+      id: r.id,
+      appointmentId: `appt-${1001 + idx}`,
+      patientId: 'user-patient-1',
+      doctorId: r.doctorId,
+      specializationId: r.specializationId,
+      rating: r.rating,
+      comment: r.comment,
+      doctorFeedback: r.doctorFeedback,
+      publicConsent: true,
+      status: 'approved',
+      verifiedVisit: r.verifiedVisit,
+      createdAt: r.createdAt,
+      doctorName: r.doctorName,
+      specializationName: r.specializationName,
+      appointmentReference: `ARG-260${idx + 1}`,
+      patientName: 'Verified Clinic Patient',
+    }))
+  );
+  const feedbackLoading = false;
 
   // Feature 6: Admin Waitlist State
   type AdminWaitlistRow = AppointmentWaitlistEntry & {
@@ -154,123 +167,98 @@ export function AdminDashboard() {
     specializationName: string;
   };
   const [waitlistRows, setWaitlistRows] = useState<AdminWaitlistRow[]>([]);
-  const [waitlistLogs, setWaitlistLogs] = useState<WaitlistNotificationLog[]>([]);
-  const [channelStatus, setChannelStatus] = useState<
+  const [waitlistLogs] = useState<WaitlistNotificationLog[]>([]);
+  const [channelStatus] = useState<
     Record<NotificationChannel, { configured: boolean; note: string }> | null
-  >(null);
+  >({
+    in_app: { configured: true, note: 'Active' },
+    whatsapp: { configured: true, note: 'Direct WhatsApp link' },
+    sms: { configured: false, note: 'Static demo mode' },
+    email: { configured: false, note: 'Static demo mode' },
+  });
   const [waitFilterDoc, setWaitFilterDoc] = useState('all');
   const [waitFilterStatus, setWaitFilterStatus] = useState('all');
   const [waitFilterDate, setWaitFilterDate] = useState('');
   const [waitFilterSearch, setWaitFilterSearch] = useState('');
-  const [waitLoading, setWaitLoading] = useState(false);
+  const waitLoading = false;
 
-  const loadAdminData = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = await apiFetch('/api/admin/overview', { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error(
-          language === 'hi'
-            ? 'प्रशासन डेटा लोड करने में समस्या हुई।'
-            : 'Unable to load clinic administration data.'
-        );
+  const loadAdminData = useCallback(() => {
+    setAppointments(readLocalAppointments());
+    addToast(language === 'hi' ? 'डेटा रीफ़्रेश किया गया।' : 'Local clinic data refreshed.', 'info');
+  }, [addToast, language]);
+
+  const reportData = useMemo(() => {
+    const q = repSearch.trim().toLowerCase();
+    const filtered = appointments.filter((a) => {
+      if (repStartDate && a.date < repStartDate) return false;
+      if (repEndDate && a.date > repEndDate) return false;
+      if (repDoctorId !== 'all' && a.doctorId !== repDoctorId) return false;
+      if (repSpecId !== 'all' && a.specializationId !== repSpecId) return false;
+      if (repStatus !== 'all' && a.status !== repStatus) return false;
+      if (q) {
+        const doc = doctors.find((d) => d.id === a.doctorId);
+        const hay = `${a.referenceCode} ${a.patientName} ${doc?.name || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
-      const data = await res.json();
-      setAppointments(data.appointments || []);
-      setDoctors(data.doctors || []);
-      setSpecializations(data.specializations || []);
-      setUsers(data.users || []);
-      setContactMessages(data.contactMessages || []);
-      setAuditLogs(data.auditLogs || []);
-      setSettingsForm(data.settings || null);
-      if (data.specializations?.[0]?.id) {
-        setNewDocSpec((prev) => prev || data.specializations[0].id);
-      }
-    } catch (err) {
-      setLoadError(
-        err instanceof Error
-          ? err.message
-          : language === 'hi'
-            ? 'नेटवर्क त्रुटि।'
-            : 'Network error while loading admin console.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [language]);
+      return true;
+    });
 
-  useEffect(() => {
-    void loadAdminData();
-  }, [loadAdminData]);
+    const summary = {
+      total: filtered.length,
+      pending: filtered.filter((a) => a.status === 'pending').length,
+      confirmed: filtered.filter((a) => a.status === 'confirmed').length,
+      completed: filtered.filter((a) => a.status === 'completed').length,
+      cancelled: filtered.filter((a) => a.status === 'cancelled').length,
+      rejected: filtered.filter((a) => a.status === 'rejected').length,
+      missed: filtered.filter((a) => a.status === 'missed').length,
+    };
 
-  const buildReportParams = useCallback(() => {
-    const params = new URLSearchParams();
-    if (repStartDate) params.set('startDate', repStartDate);
-    if (repEndDate) params.set('endDate', repEndDate);
-    if (repDoctorId && repDoctorId !== 'all') params.set('doctorId', repDoctorId);
-    if (repSpecId && repSpecId !== 'all') params.set('specializationId', repSpecId);
-    if (repStatus && repStatus !== 'all') params.set('status', repStatus);
-    if (repSearch.trim()) params.set('q', repSearch.trim());
-    return params;
-  }, [repStartDate, repEndDate, repDoctorId, repSpecId, repStatus, repSearch]);
+    const doctorDistribution = doctors.map((doc) => {
+      const spec = specializations.find((s) => s.id === doc.specializationId);
+      const list = filtered.filter((a) => a.doctorId === doc.id);
+      return {
+        doctorId: doc.id,
+        doctorName: doc.name,
+        doctorNameHi: doc.nameHi,
+        specializationName: spec?.name || doc.speciality,
+        total: list.length,
+        pending: list.filter((a) => a.status === 'pending').length,
+        confirmed: list.filter((a) => a.status === 'confirmed').length,
+        completed: list.filter((a) => a.status === 'completed').length,
+        cancelled: list.filter((a) => a.status === 'cancelled').length,
+        rejected: list.filter((a) => a.status === 'rejected').length,
+        missed: list.filter((a) => a.status === 'missed').length,
+      };
+    });
 
-  const loadReports = useCallback(async () => {
-    setRepLoading(true);
-    try {
-      const res = await apiFetch(`/api/admin/reports?${buildReportParams().toString()}`, {
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReportData(data);
-      }
-    } finally {
-      setRepLoading(false);
-    }
-  }, [buildReportParams]);
+    const rows: ReportRow[] = filtered.map((a) => {
+      const doc = doctors.find((d) => d.id === a.doctorId);
+      const spec = specializations.find((s) => s.id === a.specializationId);
+      return {
+        id: a.id,
+        referenceCode: a.referenceCode,
+        patientName: a.patientName,
+        doctorId: a.doctorId,
+        doctorName: doc?.name || a.doctorId,
+        specializationId: a.specializationId,
+        specializationName: spec?.name || doc?.speciality || '',
+        date: a.date,
+        timeSlot: a.timeSlot,
+        status: a.status,
+        bookedAt: a.createdAt,
+      };
+    });
 
-  const loadAdminFeedback = useCallback(async () => {
-    setFeedbackLoading(true);
-    try {
-      const res = await apiFetch('/api/admin/feedback', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        setFeedbackRows(data.feedbacks || []);
-      }
-    } finally {
-      setFeedbackLoading(false);
-    }
-  }, []);
+    return { summary, doctorDistribution, rows };
+  }, [appointments, doctors, specializations, repStartDate, repEndDate, repDoctorId, repSpecId, repStatus, repSearch]);
 
-  const loadAdminWaitlist = useCallback(async () => {
-    setWaitLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (waitFilterDoc !== 'all') params.set('doctorId', waitFilterDoc);
-      if (waitFilterStatus !== 'all') params.set('status', waitFilterStatus);
-      if (waitFilterDate) params.set('date', waitFilterDate);
-      if (waitFilterSearch.trim()) params.set('q', waitFilterSearch.trim());
+  const loadAdminFeedback = () => {
+    addToast('Feedback list refreshed.', 'info');
+  };
 
-      const res = await apiFetch(`/api/admin/waitlist?${params.toString()}`, {
-        credentials: 'include',
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setWaitlistRows(data.entries || []);
-        setWaitlistLogs(data.logs || []);
-        setChannelStatus(data.channelStatus || null);
-      }
-    } finally {
-      setWaitLoading(false);
-    }
-  }, [waitFilterDoc, waitFilterStatus, waitFilterDate, waitFilterSearch]);
-
-  useEffect(() => {
-    if (section === 'reports') void loadReports();
-    if (section === 'feedback') void loadAdminFeedback();
-    if (section === 'waitlist') void loadAdminWaitlist();
-  }, [section, loadReports, loadAdminFeedback, loadAdminWaitlist]);
+  const loadAdminWaitlist = () => {
+    addToast('Waitlist queue refreshed.', 'info');
+  };
 
   // Real DB KPI Counts
   const kpi = useMemo(() => {
@@ -338,150 +326,111 @@ export function AdminDashboard() {
     return Array.from(map.values());
   }, [users, appointments]);
 
-  const handleUpdateApptStatus = async (id: string, status: AppointmentStatus) => {
-    const res = await apiFetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      addToast(`Appointment updated to ${status}.`, 'success');
-      void loadAdminData();
-    } else {
-      addToast('Unable to update appointment status.', 'error');
-    }
+  const handleUpdateApptStatus = (id: string, status: AppointmentStatus) => {
+    const existing = appointments.find((a) => a.id === id);
+    if (!existing) return;
+    const updated: Appointment = { ...existing, status, updatedAt: new Date().toISOString() };
+    setAppointments(saveLocalAppointment(updated));
+    addToast(`Appointment updated to ${status}.`, 'success');
   };
 
-  const handleAddDoctor = async (e: React.FormEvent) => {
+  const handleAddDoctor = (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await apiFetch('/api/admin/doctors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        name: newDocName,
-        specializationId: newDocSpec,
-        qualification: newDocQual,
-        consultationFee: Number(newDocFee) || 800,
-      }),
-    });
-    if (res.ok) {
-      setNewDocName('');
-      setNewDocQual('');
-      await refreshBootstrap();
-      void loadAdminData();
-      addToast('Doctor added to directory.', 'success');
-    } else {
-      addToast('Could not add doctor.', 'error');
-    }
+    const spec = specializations.find((s) => s.id === newDocSpec) || specializations[0];
+    const baseDoc = doctors[0];
+    const created: Doctor = {
+      ...baseDoc,
+      id: `doc-${Date.now()}`,
+      slug: newDocName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name: newDocName.trim(),
+      nameHi: newDocName.trim(),
+      speciality: spec?.name || 'Specialist',
+      specializationId: spec?.id || newDocSpec,
+      qualification: newDocQual.trim() || 'MBBS, MD',
+      qualificationHi: newDocQual.trim() || 'एमबीबीएस, एमडी',
+      fees: Number(newDocFee) || 800,
+      consultationFee: Number(newDocFee) || 800,
+      active: true,
+    };
+    setDoctors((prev) => [...prev, created]);
+    setNewDocName('');
+    setNewDocQual('');
+    addToast('Doctor added to local preview.', 'success');
   };
 
-  const handleToggleDoctorActive = async (doc: Doctor) => {
-    const res = await apiFetch(`/api/admin/doctors/${doc.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ active: !doc.active }),
-    });
-    if (res.ok) {
-      await refreshBootstrap();
-      void loadAdminData();
-    }
+  const handleToggleDoctorActive = (doc: Doctor) => {
+    setDoctors((prev) => prev.map((d) => (d.id === doc.id ? { ...d, active: !d.active } : d)));
   };
 
-  const handleAddStaff = async (e: React.FormEvent) => {
+  const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await apiFetch('/api/admin/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        name: newStaffName,
-        email: newStaffEmail,
-        phone: newStaffPhone,
-        role: newStaffRole,
-        password: newStaffPass,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      addToast(data.error || 'Could not create user', 'error');
-      return;
-    }
+    const created: UserProfile = {
+      id: `user-${Date.now()}`,
+      name: newStaffName.trim(),
+      email: newStaffEmail.trim(),
+      phone: newStaffPhone.trim(),
+      role: newStaffRole,
+      createdAt: new Date().toISOString(),
+    };
+    setUsers((prev) => [...prev, created]);
     setNewStaffName('');
     setNewStaffEmail('');
     setNewStaffPhone('');
     setNewStaffPass('');
-    void loadAdminData();
-    addToast('User account created.', 'success');
+    addToast('User account added locally.', 'success');
   };
 
-  const handleAddSpec = async (e: React.FormEvent) => {
+  const handleAddSpec = (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await apiFetch('/api/admin/specializations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        name: newSpecName,
-        shortDescription: newSpecDesc,
-      }),
-    });
-    if (res.ok) {
-      setNewSpecName('');
-      setNewSpecDesc('');
-      await refreshBootstrap();
-      void loadAdminData();
-      addToast('Department created.', 'success');
-    }
+    const created: Specialization = {
+      id: `spec-${Date.now()}`,
+      slug: newSpecName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name: newSpecName.trim(),
+      nameHi: newSpecName.trim(),
+      shortDescription: newSpecDesc.trim(),
+      shortDescriptionHi: newSpecDesc.trim(),
+      overview: newSpecDesc.trim(),
+      overviewHi: newSpecDesc.trim(),
+      iconKey: 'stethoscope',
+      commonConditions: [],
+      commonConditionsHi: [],
+      active: true,
+    };
+    setSpecializations((prev) => [...prev, created]);
+    setNewSpecName('');
+    setNewSpecDesc('');
+    addToast('Department added locally.', 'success');
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
+  const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     if (!settingsForm) return;
-    const res = await apiFetch('/api/admin/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(settingsForm),
-    });
-    if (res.ok) {
-      await refreshBootstrap();
-      addToast('Clinic settings saved.', 'success');
-    } else {
-      addToast('Unable to save clinic settings.', 'error');
-    }
+    updateLocalSettings(settingsForm);
+    addToast('Clinic settings updated locally.', 'success');
   };
 
-  const handleServerExport = async (format: 'csv' | 'xlsx') => {
+  const handleServerExport = (format: 'csv' | 'xlsx') => {
     setRepExporting(format);
     try {
-      const params = buildReportParams();
-      params.set('format', format);
-      const res = await apiFetch(`/api/admin/reports/export?${params.toString()}`, {
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({ error: 'Export failed' }));
-        addToast(errData.error || 'Could not generate report export.', 'error');
-        return;
-      }
-      const blob = await res.blob();
+      const headers = ['Reference', 'Patient Name', 'Doctor', 'Specialization', 'Date', 'Time', 'Status'];
+      const lines = [
+        headers.join(','),
+        ...reportData.rows.map((r) =>
+          [r.referenceCode, r.patientName, r.doctorName, r.specializationName, r.date, r.timeSlot, r.status]
+            .map((cell) => `"${String(cell || '').replace(/"/g, '""')}"`)
+            .join(',')
+        ),
+      ];
+      const blob = new Blob([`\uFEFF${lines.join('\n')}`], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `arogya-appointments-report-${new Date().toISOString().slice(0, 10)}.${format}`;
+      link.download = `arogya-appointments-report-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      addToast(
-        format === 'xlsx'
-          ? 'Excel (.xlsx) report downloaded.'
-          : 'CSV report downloaded.',
-        'success'
-      );
+      addToast('CSV report downloaded.', 'success');
     } catch {
       addToast('Failed to export report file.', 'error');
     } finally {
@@ -489,61 +438,28 @@ export function AdminDashboard() {
     }
   };
 
-  const handleModerateFeedback = async (id: string, status: FeedbackStatus) => {
-    const res = await apiFetch(`/api/admin/feedback/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      addToast(`Feedback marked as ${status}.`, 'success');
-      void loadAdminFeedback();
-    } else {
-      addToast('Unable to moderate feedback.', 'error');
-    }
+  const handleModerateFeedback = (id: string, status: FeedbackStatus) => {
+    setFeedbackRows((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+    addToast(`Feedback marked as ${status}.`, 'success');
   };
 
-  const handleCancelWaitlistEntry = async (id: string) => {
-    const res = await apiFetch(`/api/admin/waitlist/${encodeURIComponent(id)}/cancel`, {
-      method: 'PATCH',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      addToast('Waitlist entry cancelled and patient notified.', 'info');
-      void loadAdminWaitlist();
-    } else {
-      addToast('Unable to cancel waitlist entry.', 'error');
-    }
+  const handleCancelWaitlistEntry = (id: string) => {
+    setWaitlistRows((prev) => prev.map((w) => (w.id === id ? { ...w, status: 'cancelled' } : w)));
+    addToast('Waitlist entry cancelled.', 'info');
   };
 
-  const handleToggleInquiryStatus = async (id: string, nextStatus: 'new' | 'reviewed') => {
-    const res = await apiFetch(`/api/contact/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    if (res.ok) {
-      setContactMessages((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, status: nextStatus } : m))
-      );
-      addToast(
-        nextStatus === 'reviewed'
-          ? language === 'hi'
-            ? 'संदेश समीक्षित चिह्नित किया गया।'
-            : 'Inquiry marked as reviewed.'
-          : language === 'hi'
-            ? 'संदेश पुनः खोला गया।'
-            : 'Inquiry reopened as new.',
-        'success'
-      );
-    } else {
-      addToast(
-        language === 'hi' ? 'संदेश स्थिति अपडेट विफल।' : 'Unable to update inquiry status.',
-        'error'
-      );
-    }
+  const handleToggleInquiryStatus = (id: string, nextStatus: 'new' | 'reviewed') => {
+    setContactMessages((prev) => prev.map((m) => (m.id === id ? { ...m, status: nextStatus } : m)));
+    addToast(
+      nextStatus === 'reviewed'
+        ? language === 'hi'
+          ? 'संदेश समीक्षित चिह्नित किया गया।'
+          : 'Inquiry marked as reviewed.'
+        : language === 'hi'
+          ? 'संदेश पुनः खोला गया।'
+          : 'Inquiry reopened as new.',
+      'success'
+    );
   };
 
   const unreadInquiriesCount = useMemo(

@@ -44,7 +44,7 @@ export interface Specialization {
   shortDescriptionHi: string;
   overview: string;
   overviewHi: string;
-  iconKey: 'heart' | 'baby' | 'bone' | 'sparkles' | 'stethoscope';
+  iconKey: 'heart' | 'baby' | 'bone' | 'sparkles' | 'stethoscope' | 'brain' | 'female';
   commonConditions: string[];
   commonConditionsHi: string[];
   active: boolean;
@@ -55,11 +55,19 @@ export interface Doctor {
   slug: string;
   name: string;
   nameHi: string;
+  speciality: string;
+  specialityHi?: string;
   specializationId: string;
   qualification: string;
   qualificationHi: string;
+  experience: string;
   experienceSummary: string;
   experienceSummaryHi: string;
+  rating: number;
+  photo: string;
+  timing: string;
+  timingHi?: string;
+  fees: number;
   bio: string;
   bioHi: string;
   languages: string[];

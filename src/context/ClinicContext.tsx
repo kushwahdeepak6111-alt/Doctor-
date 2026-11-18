@@ -9,44 +9,15 @@ import type {
   ThemeMode,
   UserProfile,
 } from '../types/clinic';
-import { apiFetch, clearSessionToken, saveSessionToken } from '../lib/authFetch';
+import { STATIC_DOCTORS } from '../data/doctors';
+import {
+  STATIC_CLINIC_SETTINGS,
+  STATIC_DEMO_USERS,
+  STATIC_REVIEW_SUMMARY,
+  STATIC_SPECIALIZATIONS,
+} from '../data/clinicData';
 
-interface BootstrapCachePayload {
-  settings: ClinicSettings | null;
-  specializations: Specialization[];
-  doctors: Doctor[];
-  reviewSummary: ReviewSummary | null;
-}
-
-const BOOTSTRAP_CACHE_KEY = 'arogya_bootstrap_cache_v1';
-
-function readBootstrapCache(): BootstrapCachePayload | null {
-  try {
-    if (typeof window === 'undefined' || !window.sessionStorage) return null;
-    const raw = window.sessionStorage.getItem(BOOTSTRAP_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<BootstrapCachePayload>;
-    if (!Array.isArray(parsed.specializations) || !Array.isArray(parsed.doctors)) return null;
-    return {
-      settings: parsed.settings || null,
-      specializations: parsed.specializations,
-      doctors: parsed.doctors,
-      reviewSummary: parsed.reviewSummary || null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeBootstrapCache(payload: BootstrapCachePayload): void {
-  try {
-    if (typeof window !== 'undefined' && window.sessionStorage) {
-      window.sessionStorage.setItem(BOOTSTRAP_CACHE_KEY, JSON.stringify(payload));
-    }
-  } catch {
-    // Ignore storage quota / sandbox restrictions
-  }
-}
+const DEMO_USER_STORAGE_KEY = 'arogya_demo_user_v1';
 
 export interface BookingDraft {
   step: number;
@@ -104,6 +75,7 @@ interface ClinicContextValue {
   addToast: (message: string, tone?: ToastItem['tone']) => void;
   toasts: ToastItem[];
   dismissToast: (id: string) => void;
+  updateLocalSettings: (next: ClinicSettings) => void;
 }
 
 function getDefaultFutureDate(): string {
@@ -149,6 +121,26 @@ function safeSetStorage(key: string, value: string): void {
   }
 }
 
+function safeRemoveStorage(key: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+function readStoredDemoUser(): UserProfile | null {
+  const raw = safeGetStorage(DEMO_USER_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as UserProfile;
+  } catch {
+    return null;
+  }
+}
+
 export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = safeGetStorage('arogya_lang');
@@ -184,21 +176,23 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     }
   });
 
-  const [initialCache] = useState<BootstrapCachePayload | null>(() => readBootstrapCache());
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [specializations, setSpecializations] = useState<Specialization[]>(
-    () => initialCache?.specializations || []
-  );
-  const [doctors, setDoctors] = useState<Doctor[]>(() => initialCache?.doctors || []);
-  const [settings, setSettings] = useState<ClinicSettings | null>(
-    () => initialCache?.settings || null
-  );
-  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(
-    () => initialCache?.reviewSummary || null
-  );
-  const [bootstrapLoading, setBootstrapLoading] = useState(!initialCache);
-  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(INITIAL_DRAFT);
+  const [user, setUser] = useState<UserProfile | null>(() => readStoredDemoUser());
+  const [authLoading] = useState(false);
+  const [specializations] = useState<Specialization[]>(STATIC_SPECIALIZATIONS);
+  const [doctors] = useState<Doctor[]>(STATIC_DOCTORS);
+  const [settings, setSettings] = useState<ClinicSettings | null>(STATIC_CLINIC_SETTINGS);
+  const [reviewSummary] = useState<ReviewSummary | null>(STATIC_REVIEW_SUMMARY);
+  const [bootstrapLoading] = useState(false);
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(() => {
+    const storedUser = readStoredDemoUser();
+    if (!storedUser) return INITIAL_DRAFT;
+    return {
+      ...INITIAL_DRAFT,
+      patientName: storedUser.name || '',
+      patientPhone: storedUser.phone || '',
+      patientEmail: storedUser.email || '',
+    };
+  });
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const addToast = useCallback((message: string, tone: ToastItem['tone'] = 'info') => {
@@ -332,113 +326,59 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshBootstrap = useCallback(async () => {
-    try {
-      const res = await apiFetch('/api/clinic/bootstrap');
-      if (!res.ok) throw new Error('Failed to load clinic directory');
-      const data = (await res.json()) as {
-        settings?: ClinicSettings;
-        specializations?: Specialization[];
-        doctors?: Doctor[];
-        reviewSummary?: ReviewSummary;
-      };
-      const nextPayload: BootstrapCachePayload = {
-        settings: data.settings || null,
-        specializations: Array.isArray(data.specializations) ? data.specializations : [],
-        doctors: Array.isArray(data.doctors) ? data.doctors : [],
-        reviewSummary: data.reviewSummary || null,
-      };
-      setSettings(nextPayload.settings);
-      setSpecializations(nextPayload.specializations);
-      setDoctors(nextPayload.doctors);
-      setReviewSummary(nextPayload.reviewSummary);
-      writeBootstrapCache(nextPayload);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setBootstrapLoading(false);
-    }
+    // 100% static frontend data — no API fetch needed
   }, []);
 
   const refreshAuth = useCallback(async () => {
-    try {
-      setAuthLoading(true);
-      const res = await apiFetch('/api/auth/me', { credentials: 'include' });
-      if (!res.ok) {
-        setUser(null);
-        return;
-      }
-      const data = (await res.json()) as { user: UserProfile | null };
-      if (!data.user) {
-        clearSessionToken();
-      }
-      setUser(data.user);
-      if (data.user) {
-        setBookingDraft((prev) => ({
-          ...prev,
-          patientName: prev.patientName || data.user!.name,
-          patientPhone: prev.patientPhone || data.user!.phone,
-          patientEmail: prev.patientEmail || data.user!.email,
-        }));
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setAuthLoading(false);
-    }
+    setUser(readStoredDemoUser());
   }, []);
 
-  useEffect(() => {
-    void refreshBootstrap();
-    void refreshAuth();
-  }, [refreshBootstrap, refreshAuth]);
-
-  const login = useCallback(
-    async (email: string, password: string) => {
-      const res = await apiFetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-      saveSessionToken(data.token);
-      setUser(data.user);
-      setBookingDraft((prev) => ({
-        ...prev,
-        patientName: prev.patientName || data.user.name,
-        patientPhone: prev.patientPhone || data.user.phone,
-        patientEmail: prev.patientEmail || data.user.email,
-      }));
-      return data.user as UserProfile;
-    },
-    []
-  );
+  const login = useCallback(async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || password.length < 6) {
+      throw new Error('Invalid email or password.');
+    }
+    const matched = STATIC_DEMO_USERS.find((u) => u.email.toLowerCase() === normalizedEmail);
+    if (!matched || password !== 'ClinicDemo#2026') {
+      throw new Error('Invalid demo credentials. Use password ClinicDemo#2026 for demo accounts.');
+    }
+    safeSetStorage(DEMO_USER_STORAGE_KEY, JSON.stringify(matched));
+    setUser(matched);
+    setBookingDraft((prev) => ({
+      ...prev,
+      patientName: prev.patientName || matched.name,
+      patientPhone: prev.patientPhone || matched.phone,
+      patientEmail: prev.patientEmail || matched.email,
+    }));
+    return matched;
+  }, []);
 
   const register = useCallback(
     async (payload: { name: string; email: string; phone: string; password: string }) => {
-      const res = await apiFetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-      saveSessionToken(data.token);
-      setUser(data.user);
-      return data.user as UserProfile;
+      const created: UserProfile = {
+        id: `demo-patient-${Date.now()}`,
+        email: payload.email.trim(),
+        name: payload.name.trim(),
+        phone: payload.phone.trim(),
+        role: 'patient',
+        preferredLanguage: language,
+        createdAt: new Date().toISOString(),
+      };
+      safeSetStorage(DEMO_USER_STORAGE_KEY, JSON.stringify(created));
+      setUser(created);
+      setBookingDraft((prev) => ({
+        ...prev,
+        patientName: created.name,
+        patientPhone: created.phone,
+        patientEmail: created.email,
+      }));
+      return created;
     },
-    []
+    [language]
   );
 
   const logout = useCallback(async () => {
-    clearSessionToken();
-    await apiFetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
+    safeRemoveStorage(DEMO_USER_STORAGE_KEY);
     setUser(null);
     navigate('/');
     addToast(language === 'hi' ? 'आप सफलतापूर्वक लॉगआउट हो गए हैं।' : 'Signed out successfully.', 'info');
@@ -481,6 +421,10 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     [navigate, resetBookingDraft]
   );
 
+  const updateLocalSettings = useCallback((next: ClinicSettings) => {
+    setSettings(next);
+  }, []);
+
   return (
     <ClinicContext.Provider
       value={{
@@ -511,6 +455,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         addToast,
         toasts,
         dismissToast,
+        updateLocalSettings,
       }}
     >
       {children}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
@@ -15,53 +15,68 @@ import {
   X,
 } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
-import { apiFetch } from '../lib/authFetch';
+import { readLocalAppointments } from '../data/clinicData';
 import { downloadAppointmentSlipPdf } from '../lib/slipGenerator';
-import type { AppointmentSlipData } from '../types/clinic';
+import type { Appointment, AppointmentSlipData } from '../types/clinic';
 import { ClinicLogo } from './ClinicLogo';
 
 interface AppointmentSlipModalProps {
   appointmentId: string | null;
+  appointment?: Appointment | null;
   onClose: () => void;
 }
 
-export function AppointmentSlipModal({ appointmentId, onClose }: AppointmentSlipModalProps) {
-  const { language, addToast } = useClinic();
-  const [slip, setSlip] = useState<AppointmentSlipData | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+export function AppointmentSlipModal({
+  appointmentId,
+  appointment,
+  onClose,
+}: AppointmentSlipModalProps) {
+  const { language, doctors, specializations, settings, addToast } = useClinic();
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    if (!appointmentId) {
-      setSlip(null);
-      setError('');
-      return;
-    }
-    let active = true;
-    setLoading(true);
-    setError('');
-    apiFetch(`/api/appointments/${encodeURIComponent(appointmentId)}/slip`, {
-      credentials: 'include',
-    })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Could not load appointment slip');
-        }
-        if (active) setSlip(data.slip as AppointmentSlipData);
-      })
-      .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Unable to load slip');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+  const slip = useMemo<AppointmentSlipData | null>(() => {
+    if (!appointmentId) return null;
+    const appt =
+      (appointment && appointment.id === appointmentId ? appointment : null) ||
+      readLocalAppointments().find((a) => a.id === appointmentId);
+    if (!appt || !settings) return null;
 
-    return () => {
-      active = false;
+    const doc = doctors.find((d) => d.id === appt.doctorId);
+    const spec = specializations.find((s) => s.id === appt.specializationId);
+
+    return {
+      documentType: appt.status === 'pending' ? 'request_receipt' : 'confirmation_slip',
+      referenceCode: appt.referenceCode,
+      status: appt.status,
+      patientName: appt.patientName,
+      doctorName: doc?.name || appt.doctorId,
+      doctorNameHi: doc?.nameHi || doc?.name || appt.doctorId,
+      doctorQualification: doc?.qualification || '',
+      specializationName: spec?.name || doc?.speciality || '',
+      specializationNameHi: spec?.nameHi || doc?.specialityHi || '',
+      date: appt.date,
+      timeSlot: appt.timeSlot,
+      bookedAt: appt.createdAt,
+      clinicName: settings.clinicName,
+      clinicNameHi: settings.clinicNameHi,
+      clinicAddress: settings.address,
+      clinicAddressHi: settings.addressHi,
+      clinicPhone: settings.phone,
+      clinicEmail: settings.email,
+      clinicHours: settings.hours,
+      clinicHoursHi: settings.hoursHi,
+      clinicNotice: settings.bookingNotice,
+      clinicNoticeHi: settings.bookingNoticeHi,
     };
-  }, [appointmentId]);
+  }, [appointmentId, appointment, doctors, specializations, settings]);
+
+  const loading = false;
+  const error =
+    appointmentId && !slip
+      ? language === 'hi'
+        ? 'चयनित अपॉइंटमेंट स्लिप उपलब्ध नहीं है।'
+        : 'Appointment slip details not found.'
+      : '';
 
   useEffect(() => {
     if (!appointmentId || typeof document === 'undefined') return;

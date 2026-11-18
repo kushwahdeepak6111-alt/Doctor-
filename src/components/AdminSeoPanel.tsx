@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Code2,
@@ -12,7 +12,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
-import { apiFetch } from '../lib/authFetch';
 import { buildRouteSeoMeta, DEFAULT_SEO_SETTINGS } from '../lib/seo';
 import type { ClinicSettings, Doctor, SeoSettings, Specialization } from '../types/clinic';
 
@@ -51,11 +50,10 @@ export function AdminSeoPanel({
   doctors,
   specializations,
 }: AdminSeoPanelProps) {
-  const { language, reviewSummary, refreshBootstrap, addToast } = useClinic();
+  const { language, reviewSummary, updateLocalSettings, addToast } = useClinic();
   const isHi = language === 'hi';
 
-  const [audit, setAudit] = useState<SeoAuditPayload | null>(null);
-  const [auditLoading, setAuditLoading] = useState(true);
+  const auditLoading = false;
   const [saving, setSaving] = useState(false);
   const [previewRoute, setPreviewRoute] = useState<string>('/');
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -83,26 +81,49 @@ export function AdminSeoPanel({
     });
   };
 
-  const loadAudit = useCallback(async () => {
-    setAuditLoading(true);
-    try {
-      const res = await apiFetch('/api/admin/seo-audit', { credentials: 'include' });
-      if (res.ok) {
-        const data = (await res.json()) as SeoAuditPayload;
-        setAudit(data);
-      }
-    } finally {
-      setAuditLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadAudit();
-  }, [loadAudit]);
-
   const previewOrigin =
-    audit?.origin ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://arogyaclinic.in');
+    typeof window !== 'undefined' ? window.location.origin : 'https://arogyaclinic.in';
+
+  const audit = useMemo<SeoAuditPayload>(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const staticRoutes = [
+      { path: '/', priority: '1.0', changefreq: 'weekly', label: 'Homepage' },
+      { path: '/doctors', priority: '0.9', changefreq: 'weekly', label: 'Doctors Directory' },
+      { path: '/specializations', priority: '0.9', changefreq: 'weekly', label: 'Specializations' },
+      { path: '/book', priority: '0.8', changefreq: 'weekly', label: 'Online Booking' },
+      { path: '/about', priority: '0.7', changefreq: 'monthly', label: 'About Clinic' },
+      { path: '/faq', priority: '0.7', changefreq: 'monthly', label: 'Patient FAQs' },
+      { path: '/contact', priority: '0.7', changefreq: 'monthly', label: 'Contact & Map' },
+    ];
+    const docRoutes = doctors
+      .filter((d) => d.active)
+      .map((d) => ({
+        path: `/doctors/${d.slug}`,
+        priority: '0.8',
+        changefreq: 'weekly',
+        label: d.name,
+      }));
+    return {
+      origin: previewOrigin,
+      sitemapUrl: `${previewOrigin}/sitemap.xml`,
+      robotsUrl: `${previewOrigin}/robots.txt`,
+      allowIndexing: seo.allowIndexing,
+      indexedRoutes: [...staticRoutes, ...docRoutes].map((r) => ({
+        ...r,
+        url: `${previewOrigin}${r.path}`,
+        lastmod: today,
+      })),
+      excludedRoutes: ['/portal', '/login', '/admin'],
+      activeDoctorCount: doctors.filter((d) => d.active).length,
+      activeSpecializationCount: specializations.filter((s) => s.active).length,
+      approvedFeedbackCount: reviewSummary?.count || 0,
+      schemas: ['MedicalClinic', 'WebSite', 'Physician', 'FAQPage', 'BreadcrumbList'],
+    };
+  }, [previewOrigin, seo.allowIndexing, doctors, specializations, reviewSummary]);
+
+  const loadAudit = () => {
+    addToast(isHi ? 'SEO ऑडिट रीफ्रेश किया गया।' : 'SEO audit refreshed.', 'info');
+  };
 
   const routeOptions = useMemo(() => {
     const base = [
@@ -142,32 +163,18 @@ export function AdminSeoPanel({
   const titleLen = seo.siteTitle.trim().length;
   const descLen = seo.defaultDescription.trim().length;
 
-  const handleSaveSeo = async (e: React.FormEvent) => {
+  const handleSaveSeo = (e: React.FormEvent) => {
     e.preventDefault();
     if (!settingsForm) return;
     setSaving(true);
-    try {
-      const res = await apiFetch('/api/admin/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ seo }),
-      });
-      if (!res.ok) {
-        addToast(isHi ? 'SEO सेटिंग्स सहेजी नहीं जा सकीं।' : 'Unable to save SEO settings.', 'error');
-        return;
-      }
-      await refreshBootstrap();
-      await loadAudit();
-      addToast(
-        isHi
-          ? 'SEO मेटाडेटा और सर्च इंजन सेटिंग्स अपडेट हो गई हैं।'
-          : 'SEO metadata and search engine settings saved.',
-        'success'
-      );
-    } finally {
-      setSaving(false);
-    }
+    updateLocalSettings({ ...settingsForm, seo });
+    setSaving(false);
+    addToast(
+      isHi
+        ? 'SEO मेटाडेटा और सर्च इंजन सेटिंग्स अपडेट हो गई हैं।'
+        : 'SEO metadata and search engine settings saved locally.',
+      'success'
+    );
   };
 
   const handleCopyText = async (text: string, label: string) => {
@@ -544,7 +551,7 @@ export function AdminSeoPanel({
             <p className="text-xs text-[#5C6F84]">
               {isHi
                 ? 'रोगी पोर्टल (/portal) और लॉगिन (/login) सुरक्षा कारणों से हमेशा noindex रहते हैं।'
-                : 'Private routes (/portal, /login, /api/*) remain protected with noindex and robots.txt Disallow.'}
+                : 'Private routes (/portal, /login, /admin) remain protected with noindex and robots.txt Disallow.'}
             </p>
             <button
               type="submit"

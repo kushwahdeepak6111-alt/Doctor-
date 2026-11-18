@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowRight, Calendar, Check, Clock, RotateCcw, Search } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { SpecializationIcon } from '../components/SpecializationIcon';
-import type { DoctorSearchResult, WeekdayKey } from '../types/clinic';
+import { searchDoctorsStatic } from '../data/clinicData';
+import type { WeekdayKey } from '../types/clinic';
 
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -16,47 +17,32 @@ export function SpecializationsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [dayFilter, setDayFilter] = useState<WeekdayKey | ''>('');
   const [dateFilter, setDateFilter] = useState('');
-  const [searchResults, setSearchResults] = useState<DoctorSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
 
   const selectedSpec = specializations.find((s) => s.slug === selectedSlug);
   const usingDoctorFilter = Boolean(searchQuery.trim() || dayFilter || dateFilter);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => {
-      setSearchLoading(true);
-      const params = new URLSearchParams();
-      if (searchQuery.trim()) params.set('q', searchQuery.trim());
-      if (selectedSpec) params.set('specializationId', selectedSpec.id);
-      if (dayFilter) params.set('day', dayFilter);
-      if (dateFilter) params.set('date', dateFilter);
-
-      fetch(`/api/doctors/search?${params.toString()}`, { signal: controller.signal })
-        .then((res) => res.json())
-        .then((data: { results?: DoctorSearchResult[] }) => {
-          setSearchResults(Array.isArray(data.results) ? data.results : []);
-        })
-        .catch(() => {
-          // Ignore abort
-        })
-        .finally(() => {
-          setSearchLoading(false);
-        });
-    }, 150);
-
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [searchQuery, selectedSpec, dayFilter, dateFilter]);
+  const searchResults = useMemo(
+    () =>
+      searchDoctorsStatic({
+        doctors,
+        specializations,
+        q: searchQuery,
+        specializationId: selectedSpec?.id || 'all',
+        day: dayFilter,
+        date: dateFilter,
+      }),
+    [doctors, specializations, searchQuery, selectedSpec, dayFilter, dateFilter]
+  );
 
   const visibleSpecs =
     selectedSlug === 'all'
       ? specializations
       : specializations.filter((s) => s.slug === selectedSlug);
 
-  const availabilityByDoctor = new Map(searchResults.map((r) => [r.doctor.id, r]));
+  const availabilityByDoctor = useMemo(
+    () => new Map(searchResults.map((r) => [r.doctor.id, r])),
+    [searchResults]
+  );
 
   return (
     <div className="bg-white min-h-[70vh]">
@@ -180,13 +166,9 @@ export function SpecializationsPage() {
           <div className="rounded-2xl border border-[#C5DDF8] bg-[#F4F8FC] p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-display text-sm font-bold text-[#0B2D52]">
-                {searchLoading
-                  ? isHi
-                    ? 'उपलब्ध चिकित्सक खोजे जा रहे हैं...'
-                    : 'Searching available specialists...'
-                  : isHi
-                    ? `${searchResults.length} मिलान करने वाले विशेषज्ञ मिले`
-                    : `${searchResults.length} matching specialist${searchResults.length === 1 ? '' : 's'} found`}
+                {isHi
+                  ? `${searchResults.length} मिलान करने वाले विशेषज्ञ मिले`
+                  : `${searchResults.length} matching specialist${searchResults.length === 1 ? '' : 's'} found`}
               </h2>
               <button
                 type="button"
@@ -197,7 +179,7 @@ export function SpecializationsPage() {
               </button>
             </div>
 
-            {!searchLoading && searchResults.length === 0 ? (
+            {searchResults.length === 0 ? (
               <p className="text-xs text-[#5C6F84]">
                 {isHi
                   ? 'चयनित फ़िल्टर के अनुसार कोई डॉक्टर स्लॉट नहीं मिला।'

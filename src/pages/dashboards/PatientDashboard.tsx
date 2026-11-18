@@ -14,14 +14,17 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { apiFetch } from '../../lib/authFetch';
+import {
+  computeDoctorSlotsStatic,
+  readLocalAppointments,
+  saveLocalAppointment,
+} from '../../data/clinicData';
 import { useT } from '../../i18n/translations';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
 import { StatusIndicator } from '../../components/StatusIndicator';
 import type {
   Appointment,
   AppointmentWaitlistEntry,
-  AvailabilitySlot,
   ClinicNotification,
   PatientFeedback,
 } from '../../types/clinic';
@@ -34,19 +37,32 @@ export function PatientDashboard() {
     specializations,
     logout,
     navigate,
-    refreshAuth,
     startBookingWith,
     addToast,
   } = useClinic();
   const t = useT(language);
   const isHi = language === 'hi';
 
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [notifications, setNotifications] = useState<ClinicNotification[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>(() =>
+    readLocalAppointments()
+  );
+  const [notifications, setNotifications] = useState<ClinicNotification[]>([
+    {
+      id: 'notif-demo-1',
+      userId: user?.id || 'user-patient-1',
+      title: 'Welcome to Arogya Patient Portal',
+      titleHi: 'आरोग्य रोगी पोर्टल में आपका स्वागत है',
+      message: 'View upcoming visits, download confirmation slips, or book another specialist.',
+      messageHi: 'अपने आगामी अपॉइंटमेंट देखें, स्लिप डाउनलोड करें या नया परामर्श बुक करें।',
+      type: 'info',
+      read: false,
+      createdAt: new Date().toISOString(),
+    },
+  ]);
   const [myFeedbacks, setMyFeedbacks] = useState<PatientFeedback[]>([]);
   const [waitlistEntries, setWaitlistEntries] = useState<AppointmentWaitlistEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const loading = false;
+  const loadError = '';
   const [tab, setTab] = useState<
     'upcoming' | 'pending' | 'history' | 'waitlist' | 'notifications' | 'profile'
   >('upcoming');
@@ -65,48 +81,9 @@ export function PatientDashboard() {
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const [apptRes, notifRes, fbRes, waitRes] = await Promise.all([
-        apiFetch('/api/appointments', { credentials: 'include' }),
-        apiFetch('/api/notifications', { credentials: 'include' }),
-        apiFetch('/api/feedback/my', { credentials: 'include' }),
-        apiFetch('/api/waitlist/my', { credentials: 'include' }),
-      ]);
-      if (!apptRes.ok || !notifRes.ok) {
-        throw new Error(
-          isHi
-            ? 'आपके पोर्टल रिकॉर्ड लोड नहीं हो सके।'
-            : 'Unable to load your portal records right now.'
-        );
-      }
-      const apptData = await apptRes.json();
-      const notifData = await notifRes.json();
-      const fbData = fbRes.ok ? await fbRes.json() : { feedbacks: [] };
-      const waitData = waitRes.ok ? await waitRes.json() : { entries: [] };
-
-      setAppointments(apptData.appointments || []);
-      setNotifications(notifData.notifications || []);
-      setMyFeedbacks(fbData.feedbacks || []);
-      setWaitlistEntries(waitData.entries || []);
-    } catch (err) {
-      setLoadError(
-        err instanceof Error
-          ? err.message
-          : isHi
-            ? 'नेटवर्क त्रुटि।'
-            : 'Network error while loading appointments.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [isHi]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loadData = useCallback(() => {
+    setAppointments(readLocalAppointments());
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -147,138 +124,88 @@ export function PatientDashboard() {
   const nextConfirmed = confirmedList[0];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const handleCancel = async (id: string) => {
-    const res = await apiFetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status: 'cancelled' }),
-    });
-    if (res.ok) {
-      addToast(isHi ? 'अपॉइंटमेंट रद्द कर दिया गया।' : 'Appointment cancelled.', 'info');
-      void loadData();
-    } else {
-      addToast(isHi ? 'अपॉइंटमेंट रद्द नहीं हो सका।' : 'Unable to cancel appointment.', 'error');
-    }
+  const handleCancel = (id: string) => {
+    const existing = appointments.find((a) => a.id === id);
+    if (!existing) return;
+    const updated: Appointment = {
+      ...existing,
+      status: 'cancelled',
+      updatedAt: new Date().toISOString(),
+    };
+    const nextList = saveLocalAppointment(updated);
+    setAppointments(nextList);
+    addToast(isHi ? 'अपॉइंटमेंट रद्द कर दिया गया।' : 'Appointment cancelled.', 'info');
   };
 
-  const handleSubmitFeedback = async (e: React.FormEvent, appointmentId: string) => {
+  const handleSubmitFeedback = (e: React.FormEvent, appointmentId: string) => {
     e.preventDefault();
+    const appt = appointments.find((a) => a.id === appointmentId);
+    if (!appt) return;
     setFbSubmitting(true);
-    try {
-      const res = await apiFetch('/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          appointmentId,
-          rating: fbRating,
-          comment: fbComment,
-          doctorFeedback: fbDoctorFeedback || undefined,
-          publicConsent: fbConsent,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        addToast(data.error || 'Could not submit feedback.', 'error');
-        return;
-      }
-      addToast(
-        isHi
-          ? 'सत्यापित प्रतिक्रिया सबमिट की गई और क्लिनिक समीक्षा के लिए लंबित है।'
-          : 'Verified feedback submitted and pending clinic review.',
-        'success'
-      );
-      setFeedbackOpenApptId(null);
-      setFbComment('');
-      setFbDoctorFeedback('');
-      setFbRating(5);
-      void loadData();
-    } finally {
-      setFbSubmitting(false);
-    }
+    const created: PatientFeedback = {
+      id: `fb-${Date.now()}`,
+      appointmentId,
+      patientId: user?.id || 'user-patient-1',
+      doctorId: appt.doctorId,
+      specializationId: appt.specializationId,
+      rating: fbRating,
+      comment: fbComment.trim(),
+      doctorFeedback: fbDoctorFeedback.trim() || undefined,
+      publicConsent: fbConsent,
+      status: 'pending_review',
+      verifiedVisit: true,
+      createdAt: new Date().toISOString(),
+    };
+    setMyFeedbacks((prev) => [created, ...prev]);
+    setFbSubmitting(false);
+    setFeedbackOpenApptId(null);
+    setFbComment('');
+    setFbDoctorFeedback('');
+    setFbRating(5);
+    addToast(
+      isHi
+        ? 'प्रतिक्रिया स्थानीय रूप से सहेजी गई।'
+        : 'Verified feedback recorded locally.',
+      'success'
+    );
   };
 
-  const handleWithdrawWaitlist = async (waitlistId: string) => {
-    const res = await apiFetch(`/api/waitlist/${encodeURIComponent(waitlistId)}/withdraw`, {
-      method: 'PATCH',
-      credentials: 'include',
-    });
-    if (res.ok) {
-      addToast(
-        isHi ? 'प्रतीक्षा सूची अनुरोध वापस ले लिया गया।' : 'Waitlist entry withdrawn.',
-        'info'
-      );
-      void loadData();
-    } else {
-      addToast(
-        isHi ? 'प्रतीक्षा सूची अपडेट नहीं हो सकी।' : 'Unable to withdraw waitlist entry.',
-        'error'
-      );
-    }
+  const handleWithdrawWaitlist = (waitlistId: string) => {
+    setWaitlistEntries((prev) =>
+      prev.map((w) => (w.id === waitlistId ? { ...w, status: 'withdrawn' } : w))
+    );
+    addToast(
+      isHi ? 'प्रतीक्षा सूची अनुरोध वापस ले लिया गया।' : 'Waitlist entry withdrawn.',
+      'info'
+    );
   };
 
-  const handleBookFromWaitlist = async (entry: AppointmentWaitlistEntry) => {
+  const handleBookFromWaitlist = (entry: AppointmentWaitlistEntry) => {
     if (!entry.notifiedSlot) return;
     const { date, timeSlot } = entry.notifiedSlot;
-    try {
-      const availRes = await fetch(
-        `/api/availability?doctorId=${encodeURIComponent(entry.doctorId)}&date=${encodeURIComponent(date)}`
-      );
-      const availData = (await availRes.json()) as { slots?: AvailabilitySlot[] };
-      const stillOpen = (availData.slots || []).some(
-        (s) => s.time === timeSlot && s.status === 'available'
-      );
-      if (!stillOpen) {
-        addToast(
-          isHi
-            ? 'यह स्लॉट किसी अन्य रोगी द्वारा पहले ही बुक किया जा चुका है। कृपया उपलब्ध स्लॉट चुनें।'
-            : 'That slot was already reserved by another patient. Opening calendar to choose another available slot.',
-          'info'
-        );
-        startBookingWith({ doctorId: entry.doctorId, date, waitlistId: entry.id });
-        return;
-      }
-      startBookingWith({
-        doctorId: entry.doctorId,
-        date,
-        timeSlot,
-        waitlistId: entry.id,
-      });
-    } catch {
-      startBookingWith({ doctorId: entry.doctorId, date, waitlistId: entry.id });
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    const res = await apiFetch('/api/notifications/read-all', {
-      method: 'POST',
-      credentials: 'include',
+    const doc = doctors.find((d) => d.id === entry.doctorId);
+    const stillOpen = doc
+      ? computeDoctorSlotsStatic(doc, date, appointments).some(
+          (s) => s.time === timeSlot && s.status === 'available'
+        )
+      : true;
+    startBookingWith({
+      doctorId: entry.doctorId,
+      date,
+      timeSlot: stillOpen ? timeSlot : undefined,
+      waitlistId: entry.id,
     });
-    if (res.ok) {
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    }
   };
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleMarkAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
-    try {
-      const res = await apiFetch('/api/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ name: profileName, phone: profilePhone }),
-      });
-      if (res.ok) {
-        await refreshAuth();
-        addToast(isHi ? 'प्रोफ़ाइल अपडेट की गई।' : 'Profile updated.', 'success');
-      } else {
-        addToast(isHi ? 'प्रोफ़ाइल सहेजी नहीं जा सकी।' : 'Could not update profile.', 'error');
-      }
-    } finally {
-      setSavingProfile(false);
-    }
+    setSavingProfile(false);
+    addToast(isHi ? 'प्रोफ़ाइल अपडेट की गई।' : 'Profile updated locally.', 'success');
   };
 
   const renderEmptyState = () => (

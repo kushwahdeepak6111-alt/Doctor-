@@ -12,14 +12,17 @@ import {
   X,
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { apiFetch } from '../../lib/authFetch';
+import {
+  computeDoctorSlotsStatic,
+  readLocalAppointments,
+  saveLocalAppointment,
+} from '../../data/clinicData';
 import { useT } from '../../i18n/translations';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
 import { StatusIndicator } from '../../components/StatusIndicator';
 import type {
   Appointment,
   AppointmentStatus,
-  AvailabilitySlot,
   ContactMessage,
 } from '../../types/clinic';
 
@@ -27,10 +30,12 @@ export function StaffDashboard() {
   const { language, user, doctors, specializations, logout, addToast } = useClinic();
   const t = useT(language);
 
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>(() =>
+    readLocalAppointments()
+  );
   const [inquiries, setInquiries] = useState<ContactMessage[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const loading = false;
+  const loadError = '';
   const [tab, setTab] = useState<'pending' | 'confirmed' | 'cancelled' | 'availability' | 'inquiries'>('pending');
   const [search, setSearch] = useState('');
   const [slipAppointmentId, setSlipAppointmentId] = useState<string | null>(null);
@@ -38,145 +43,95 @@ export function StaffDashboard() {
   // Doctor availability lookup state
   const [availDocId, setAvailDocId] = useState(doctors[0]?.id || '');
   const [availDate, setAvailDate] = useState(new Date().toISOString().slice(0, 10));
-  const [availSlots, setAvailSlots] = useState<AvailabilitySlot[]>([]);
 
   // Assisted booking modal
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistDocId, setAssistDocId] = useState(doctors[0]?.id || '');
   const [assistDate, setAssistDate] = useState(new Date().toISOString().slice(0, 10));
   const [assistSlot, setAssistSlot] = useState('');
-  const [assistSlots, setAssistSlots] = useState<AvailabilitySlot[]>([]);
-  const [assistSlotsLoading, setAssistSlotsLoading] = useState(false);
+  const assistSlotsLoading = false;
   const [assistSubmitting, setAssistSubmitting] = useState(false);
   const [assistName, setAssistName] = useState('');
   const [assistPhone, setAssistPhone] = useState('');
   const [assistEmail, setAssistEmail] = useState('');
   const [assistReason, setAssistReason] = useState('');
 
-  const loadOverview = useCallback(async () => {
-    setLoading(true);
-    setLoadError('');
-    try {
-      const res = await apiFetch('/api/admin/overview', { credentials: 'include' });
-      if (!res.ok) {
-        throw new Error(
-          language === 'hi'
-            ? 'रिसेप्शन डेटा लोड करने में समस्या हुई।'
-            : 'Unable to load reception desk records.'
-        );
-      }
-      const data = await res.json();
-      setAppointments(data.appointments || []);
-      setInquiries(data.contactMessages || []);
-    } catch (err) {
-      setLoadError(
-        err instanceof Error
-          ? err.message
-          : language === 'hi'
-            ? 'नेटवर्क त्रुटि।'
-            : 'Network error while loading desk overview.'
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [language]);
-
-  useEffect(() => {
-    void loadOverview();
-  }, [loadOverview]);
+  const loadOverview = useCallback(() => {
+    setAppointments(readLocalAppointments());
+  }, []);
 
   useEffect(() => {
     if (!availDocId && doctors[0]?.id) setAvailDocId(doctors[0].id);
     if (!assistDocId && doctors[0]?.id) setAssistDocId(doctors[0].id);
   }, [doctors, availDocId, assistDocId]);
 
-  useEffect(() => {
-    if (!availDocId || !availDate) return;
-    apiFetch(`/api/availability?doctorId=${encodeURIComponent(availDocId)}&date=${encodeURIComponent(availDate)}`)
-      .then((r) => r.json())
-      .then((d) => setAvailSlots(d.slots || []))
-      .catch(() => setAvailSlots([]));
-  }, [availDocId, availDate, appointments]);
+  const availSlots = useMemo(() => {
+    const doc = doctors.find((d) => d.id === availDocId);
+    if (!doc || !availDate) return [];
+    return computeDoctorSlotsStatic(doc, availDate, appointments);
+  }, [doctors, availDocId, availDate, appointments]);
 
-  useEffect(() => {
-    if (!assistOpen || !assistDocId || !assistDate) return;
-    setAssistSlotsLoading(true);
-    apiFetch(`/api/availability?doctorId=${encodeURIComponent(assistDocId)}&date=${encodeURIComponent(assistDate)}`)
-      .then((r) => r.json())
-      .then((d) => setAssistSlots(d.slots || []))
-      .catch(() => setAssistSlots([]))
-      .finally(() => setAssistSlotsLoading(false));
-  }, [assistOpen, assistDocId, assistDate]);
+  const assistSlots = useMemo(() => {
+    const doc = doctors.find((d) => d.id === assistDocId);
+    if (!assistOpen || !doc || !assistDate) return [];
+    return computeDoctorSlotsStatic(doc, assistDate, appointments);
+  }, [assistOpen, doctors, assistDocId, assistDate, appointments]);
 
-  const updateStatus = async (id: string, status: AppointmentStatus) => {
-    const res = await apiFetch(`/api/appointments/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      addToast(language === 'hi' ? 'स्थिति अपडेट हो गई।' : `Appointment marked ${status}.`, 'success');
-      void loadOverview();
-    } else {
-      addToast(language === 'hi' ? 'अपडेट विफल रहा।' : 'Unable to update appointment status.', 'error');
-    }
+  const updateStatus = (id: string, status: AppointmentStatus) => {
+    const existing = appointments.find((a) => a.id === id);
+    if (!existing) return;
+    const updated: Appointment = {
+      ...existing,
+      status,
+      updatedAt: new Date().toISOString(),
+    };
+    setAppointments(saveLocalAppointment(updated));
+    addToast(language === 'hi' ? 'स्थिति अपडेट हो गई।' : `Appointment marked ${status}.`, 'success');
   };
 
-  const handleMarkInquiryReviewed = async (id: string) => {
-    const res = await apiFetch(`/api/contact/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ status: 'reviewed' }),
-    });
-    if (res.ok) {
-      addToast(language === 'hi' ? 'संदेश समीक्षित चिह्नित।' : 'Inquiry marked reviewed.', 'success');
-      void loadOverview();
-    }
+  const handleMarkInquiryReviewed = (id: string) => {
+    setInquiries((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, status: 'reviewed' } : m))
+    );
+    addToast(language === 'hi' ? 'संदेश समीक्षित चिह्नित।' : 'Inquiry marked reviewed.', 'success');
   };
 
-  const handleAssistBook = async (e: React.FormEvent) => {
+  const handleAssistBook = (e: React.FormEvent) => {
     e.preventDefault();
     const doc = doctors.find((d) => d.id === assistDocId);
     if (!doc || !assistSlot) return;
     setAssistSubmitting(true);
-    try {
-      const res = await apiFetch('/api/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          doctorId: doc.id,
-          specializationId: doc.specializationId,
-          date: assistDate,
-          timeSlot: assistSlot,
-          patientName: assistName,
-          patientPhone: assistPhone,
-          patientEmail: assistEmail || 'walkin@arogyaclinic.in',
-          reason: assistReason,
-          autoConfirmByStaff: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        addToast(data.error || 'Booking failed', 'error');
-        return;
-      }
-      addToast(
-        language === 'hi' ? 'रोगी अपॉइंटमेंट कन्फर्म किया गया।' : 'Assisted appointment confirmed.',
-        'success'
-      );
-      setAssistOpen(false);
-      setAssistName('');
-      setAssistPhone('');
-      setAssistEmail('');
-      setAssistReason('');
-      setAssistSlot('');
-      void loadOverview();
-    } finally {
-      setAssistSubmitting(false);
-    }
+    const nowIso = new Date().toISOString();
+    const newAppt: Appointment = {
+      id: `appt-${Date.now()}`,
+      referenceCode: `ARG-${String(Math.floor(1000 + Math.random() * 9000))}`,
+      patientId: null,
+      patientName: assistName.trim(),
+      patientPhone: assistPhone.trim(),
+      patientEmail: assistEmail.trim() || 'walkin@arogyaclinic.in',
+      doctorId: doc.id,
+      specializationId: doc.specializationId,
+      date: assistDate,
+      timeSlot: assistSlot,
+      reason: assistReason.trim(),
+      status: 'confirmed',
+      documents: [],
+      createdByRole: 'staff',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    setAppointments(saveLocalAppointment(newAppt));
+    setAssistSubmitting(false);
+    setAssistOpen(false);
+    setAssistName('');
+    setAssistPhone('');
+    setAssistEmail('');
+    setAssistReason('');
+    setAssistSlot('');
+    addToast(
+      language === 'hi' ? 'रोगी अपॉइंटमेंट कन्फर्म किया गया।' : 'Assisted appointment confirmed.',
+      'success'
+    );
   };
 
   const filteredAppointments = useMemo(() => {

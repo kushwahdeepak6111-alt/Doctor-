@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
-import type { AvailabilitySlot } from '../../types/clinic';
+import { computeDoctorSlotsStatic } from '../../data/clinicData';
 
 function getTomorrowStr(): string {
   const d = new Date();
@@ -15,12 +15,10 @@ export function QuickBookingSection() {
   const { language, navigate, specializations, doctors, setBookingDraft } = useClinic();
   const t = useT(language);
 
-  const [qbSpecId, setQbSpecId] = useState('');
-  const [qbDocId, setQbDocId] = useState('');
+  const [qbSpecId, setQbSpecId] = useState(specializations[0]?.id || '');
+  const [qbDocId, setQbDocId] = useState(doctors[0]?.id || '');
   const [qbDate, setQbDate] = useState(getTomorrowStr);
   const [qbSlot, setQbSlot] = useState('');
-  const [qbSlots, setQbSlots] = useState<AvailabilitySlot[]>([]);
-  const [qbLoading, setQbLoading] = useState(false);
 
   const qbDoctors = useMemo(() => {
     if (!qbSpecId) return doctors;
@@ -40,35 +38,15 @@ export function QuickBookingSection() {
     }
   }, [qbDoctors, qbDocId]);
 
+  const qbSlots = useMemo(() => {
+    const doc = doctors.find((d) => d.id === qbDocId);
+    if (!doc || !qbDate) return [];
+    return computeDoctorSlotsStatic(doc, qbDate).filter((s) => s.status === 'available');
+  }, [doctors, qbDocId, qbDate]);
+
   useEffect(() => {
-    if (!qbDocId || !qbDate) {
-      setQbSlots([]);
-      return;
-    }
-    let active = true;
-    setQbLoading(true);
-    fetch(
-      `/api/availability?doctorId=${encodeURIComponent(qbDocId)}&date=${encodeURIComponent(qbDate)}`
-    )
-      .then((r) => r.json())
-      .then((d: { slots?: AvailabilitySlot[] }) => {
-        if (!active) return;
-        const available = (d.slots || []).filter((s) => s.status === 'available');
-        setQbSlots(available);
-        setQbSlot((prev) =>
-          available.some((s) => s.time === prev) ? prev : available[0]?.time || ''
-        );
-      })
-      .catch(() => {
-        if (active) setQbSlots([]);
-      })
-      .finally(() => {
-        if (active) setQbLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [qbDocId, qbDate]);
+    setQbSlot((prev) => (qbSlots.some((s) => s.time === prev) ? prev : qbSlots[0]?.time || ''));
+  }, [qbSlots]);
 
   const handleQuickBookSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,8 +81,8 @@ export function QuickBookingSection() {
             </h2>
             <p className="text-[15px] text-slate-200 leading-relaxed max-w-lg">
               {language === 'hi'
-                ? 'कुछ ही चरणों में अपना विभाग, चिकित्सक और उपलब्ध समय चुनें। रिसेप्शन द्वारा पुष्टि के बाद आपको पोर्टल में अपडेट मिलेगा।'
-                : 'Skip the waiting room queue—choose your department, preferred specialist, and live available time slot in seconds.'}
+                ? 'कुछ ही चरणों में अपना विभाग, चिकित्सक और उपलब्ध समय चुनें और तुरंत व्हाट्सएप पर बुकिंग विवरण भेजें।'
+                : 'Skip the waiting room queue—choose your department, preferred specialist, and available time slot in seconds.'}
             </p>
             <div className="pt-1">
               <button
@@ -186,15 +164,10 @@ export function QuickBookingSection() {
                     <select
                       id="qb-slot"
                       value={qbSlot}
-                      disabled={qbLoading}
                       onChange={(e) => setQbSlot(e.target.value)}
-                      className="w-full min-h-[42px] px-3 py-2 text-xs font-mono border border-[#E2EAF2] rounded-xl bg-[#F4F8FC] tabular-nums disabled:opacity-60"
+                      className="w-full min-h-[42px] px-3 py-2 text-xs font-mono border border-[#E2EAF2] rounded-xl bg-[#F4F8FC] tabular-nums"
                     >
-                      {qbLoading ? (
-                        <option value="">
-                          {language === 'hi' ? 'स्लॉट जांचे जा रहे हैं...' : 'Checking slots...'}
-                        </option>
-                      ) : qbSlots.length === 0 ? (
+                      {qbSlots.length === 0 ? (
                         <option value="">
                           {language === 'hi' ? 'कोई स्लॉट नहीं' : 'No open slots'}
                         </option>

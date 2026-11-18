@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, Calendar, Clock, Stethoscope } from 'lucide-react';
+import { ArrowRight, Calendar, Clock, Star, Stethoscope } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT } from '../i18n/translations';
 import { resolveClinicImage } from '../lib/clinicImages';
@@ -25,11 +25,19 @@ export function DoctorCard({
 
   const spec = specializations.find((s) => s.id === doctor.specializationId);
   const name = language === 'hi' ? doctor.nameHi : doctor.name;
-  const specName = spec ? (language === 'hi' ? spec.nameHi : spec.name) : '';
+  const specName =
+    language === 'hi'
+      ? doctor.specialityHi || spec?.nameHi || doctor.speciality
+      : doctor.speciality || spec?.name || '';
   const qualification = language === 'hi' ? doctor.qualificationHi : doctor.qualification;
-  const experience = language === 'hi' ? doctor.experienceSummaryHi : doctor.experienceSummary;
+  const experience =
+    language === 'hi'
+      ? doctor.experienceSummaryHi
+      : doctor.experience || doctor.experienceSummary;
+  const timingText = language === 'hi' ? doctor.timingHi || doctor.timing : doctor.timing;
+  const feeValue = doctor.fees || doctor.consultationFee;
   const bio = language === 'hi' ? doctor.bioHi : doctor.bio;
-  const languagesText = (language === 'hi' ? doctor.languagesHi : doctor.languages).join(', ');
+  const photoSrc = doctor.photo || resolveClinicImage(doctor.imageKey);
 
   return (
     <article className="group h-full flex flex-col bg-white border border-[#E2EAF2] rounded-2xl overflow-hidden shadow-xs hover:shadow-md hover:border-[#C5DDF8] transition-all">
@@ -44,7 +52,7 @@ export function DoctorCard({
       >
         {!imgError ? (
           <img
-            src={resolveClinicImage(doctor.imageKey)}
+            src={photoSrc}
             alt={name}
             loading="lazy"
             decoding="async"
@@ -62,7 +70,15 @@ export function DoctorCard({
 
       <div className="p-5 flex-1 flex flex-col justify-between gap-4">
         <div className="space-y-1.5">
-          <div className="text-xs font-semibold text-[#1C7ED6]">{specName}</div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-[#1C7ED6] truncate">{specName}</span>
+            {typeof doctor.rating === 'number' && (
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#0B2D52] tabular-nums shrink-0">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
+                {doctor.rating.toFixed(1)}
+              </span>
+            )}
+          </div>
           <h3 className="font-display text-base font-bold text-[#0B2D52] leading-snug">
             <button
               type="button"
@@ -106,9 +122,9 @@ export function DoctorCard({
           )}
 
           <div className="flex items-center justify-between text-xs text-[#5C6F84] gap-2">
-            <span className="truncate">{languagesText}</span>
+            <span className="truncate">{timingText || (language === 'hi' ? doctor.languagesHi : doctor.languages).join(', ')}</span>
             <span className="font-mono font-semibold text-[#0B2D52] tabular-nums whitespace-nowrap">
-              ₹{doctor.consultationFee}
+              ₹{feeValue}
             </span>
           </div>
 

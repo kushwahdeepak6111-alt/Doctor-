@@ -19,7 +19,9 @@ export function ContactPage() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const [sentWhatsAppHref, setSentWhatsAppHref] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!name.trim() || !/^\S+@\S+\.\S+$/.test(email.trim()) || !message.trim()) {
@@ -31,26 +33,25 @@ export function ContactPage() {
       return;
     }
     setSending(true);
-    try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, subject, message }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send message');
-      setSent(true);
-      setName('');
-      setEmail('');
-      setPhone('');
-      setSubject('');
-      setMessage('');
-      addToast(t.contactSection.success, 'success');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to send message');
-    } finally {
-      setSending(false);
-    }
+    const waText = [
+      `Contact Inquiry from ${name.trim()}`,
+      phone.trim() ? `Phone: ${phone.trim()}` : '',
+      `Email: ${email.trim()}`,
+      subject.trim() ? `Subject: ${subject.trim()}` : '',
+      `Message: ${message.trim()}`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    setSentWhatsAppHref(getWhatsAppHref(settings?.phone, language, waText));
+    setSent(true);
+    setName('');
+    setEmail('');
+    setPhone('');
+    setSubject('');
+    setMessage('');
+    setSending(false);
+    addToast(t.contactSection.success, 'success');
   };
 
   return (
@@ -132,9 +133,22 @@ export function ContactPage() {
               </h2>
 
               {sent && (
-                <div className="flex items-center gap-2.5 rounded-xl border border-[#C5DDF8] bg-[#EAF3FC] px-4 py-3 text-sm text-[#0B2D52]">
-                  <CheckCircle2 className="w-4 h-4 text-[#1C7ED6] shrink-0" aria-hidden="true" />
-                  <span>{t.contactSection.success}</span>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#C5DDF8] bg-[#EAF3FC] px-4 py-3 text-sm text-[#0B2D52]">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#1C7ED6] shrink-0" aria-hidden="true" />
+                    <span>{t.contactSection.success}</span>
+                  </div>
+                  {sentWhatsAppHref && (
+                    <a
+                      href={sentWhatsAppHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#128C7E] hover:bg-[#0F766A] px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                    >
+                      <WhatsAppIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span>{language === 'hi' ? 'व्हाट्सएप पर भेजें' : 'Send via WhatsApp'}</span>
+                    </a>
+                  )}
                 </div>
               )}
 
