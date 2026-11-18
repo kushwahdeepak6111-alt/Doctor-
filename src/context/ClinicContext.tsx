@@ -16,6 +16,7 @@ import {
   STATIC_REVIEW_SUMMARY,
   STATIC_SPECIALIZATIONS,
 } from '../data/clinicData';
+import { fetchClinicCatalog } from '../lib/clinicApi';
 
 const DEMO_USER_STORAGE_KEY = 'arogya_demo_user_v1';
 
@@ -337,14 +338,9 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     setBootstrapLoading(true);
     setBootstrapError(null);
     try {
-      const validSpecs = Array.isArray(STATIC_SPECIALIZATIONS)
-        ? STATIC_SPECIALIZATIONS.filter((s) => Boolean(s && s.id && s.name))
-        : [];
-      const validDoctors = Array.isArray(STATIC_DOCTORS)
-        ? STATIC_DOCTORS.filter((d) => Boolean(d && d.id && d.name))
-        : [];
-      setSpecializations(validSpecs);
-      setDoctors(validDoctors);
+      const catalog = await fetchClinicCatalog();
+      setSpecializations(catalog.specializations);
+      setDoctors(catalog.doctors);
     } catch (err) {
       setBootstrapError(
         err instanceof Error && err.message
@@ -355,6 +351,16 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       setBootstrapLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hasSupabaseEnv = Boolean(
+      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+    );
+    if (hasSupabaseEnv) {
+      void refreshBootstrap();
+    }
+  }, [refreshBootstrap]);
 
   const refreshAuth = useCallback(async () => {
     setUser(readStoredDemoUser());

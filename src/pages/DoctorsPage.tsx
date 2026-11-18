@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, Filter, RotateCcw, Search } from 'lucide-react';
+import { AlertCircle, Calendar, Filter, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { DoctorCard } from '../components/DoctorCard';
@@ -9,7 +9,15 @@ import type { WeekdayKey } from '../types/clinic';
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export function DoctorsPage() {
-  const { language, doctors, specializations, navigate } = useClinic();
+  const {
+    language,
+    doctors,
+    specializations,
+    bootstrapLoading,
+    bootstrapError,
+    refreshBootstrap,
+    navigate,
+  } = useClinic();
   const t = useT(language);
   const isHi = language === 'hi';
 
@@ -157,9 +165,13 @@ export function DoctorsPage() {
       <section className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#5C6F84]">
           <span>
-            {isHi
-              ? `${results.length} विशेषज्ञ चिकित्सक मिले`
-              : `Showing ${results.length} specialist${results.length === 1 ? '' : 's'}`}
+            {bootstrapLoading
+              ? isHi
+                ? 'विशेषज्ञ चिकित्सक लोड हो रहे हैं...'
+                : 'Loading specialists...'
+              : isHi
+                ? `${results.length} विशेषज्ञ चिकित्सक मिले`
+                : `Showing ${results.length} specialist${results.length === 1 ? '' : 's'}`}
           </span>
           {dateFilter && (
             <span className="font-medium text-[#0B2D52]">
@@ -170,28 +182,95 @@ export function DoctorsPage() {
           )}
         </div>
 
-        {results.length === 0 ? (
+        {bootstrapError && (
+          <div
+            role="alert"
+            className="border border-rose-200 rounded-2xl p-6 bg-rose-50 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="font-display text-sm font-bold">
+                  {isHi
+                    ? 'चिकित्सकों की सूची लोड करने में त्रुटि'
+                    : 'Unable to load specialist directory'}
+                </p>
+                <p className="text-xs opacity-90">{bootstrapError}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refreshBootstrap()}
+              className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-xl shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{isHi ? 'पुनः प्रयास करें' : 'Retry'}</span>
+            </button>
+          </div>
+        )}
+
+        {bootstrapLoading ? (
+          <div className="space-y-4" aria-live="polite" aria-busy="true">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#5C6F84]">
+              <Loader2 className="w-4 h-4 animate-spin text-[#1C7ED6]" aria-hidden="true" />
+              <span>
+                {isHi
+                  ? 'सत्यापित चिकित्सकों का विवरण लोड हो रहा है...'
+                  : 'Loading verified specialist profiles...'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {Array.from({ length: 4 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-[380px] rounded-2xl border border-[#E2EAF2] bg-[#F4F8FC] animate-pulse"
+                />
+              ))}
+            </div>
+          </div>
+        ) : results.length === 0 ? (
           <div className="border border-[#E2EAF2] rounded-2xl p-10 text-center space-y-3 bg-[#F4F8FC]">
             <p className="font-display text-lg font-bold text-[#0B2D52]">
-              {isHi ? 'इस खोज के अनुसार कोई चिकित्सक उपलब्ध नहीं है' : 'No specialists match these filters'}
+              {doctors.length === 0
+                ? isHi
+                  ? 'वर्तमान में कोई विशेषज्ञ उपलब्ध नहीं है'
+                  : 'No specialists are currently available'
+                : isHi
+                  ? 'इस खोज के अनुसार कोई चिकित्सक उपलब्ध नहीं है'
+                  : 'No specialists match these filters'}
             </p>
             <p className="text-sm text-[#5C6F84] max-w-md mx-auto">
-              {dateFilter
+              {doctors.length === 0
                 ? isHi
-                  ? 'चयनित तिथि पर कोई खाली स्लॉट नहीं मिला। कृपया अन्य तिथि आज़माएँ या बुकिंग पृष्ठ पर जाएं।'
-                  : 'No open appointment slots were found on that date. Try clearing the date filter or choosing another weekday.'
-                : isHi
-                  ? 'कृपया खोज शब्द बदलें या सभी फ़िल्टर रीसेट करें।'
-                  : 'Try adjusting your search keywords, specialization, or day filter.'}
+                  ? 'कृपया सूची पुनः लोड करें या क्लिनिक रिसेप्शन से संपर्क करें।'
+                  : 'Please reload the specialist directory or proceed to appointment booking.'
+                : dateFilter
+                  ? isHi
+                    ? 'चयनित तिथि पर कोई खाली स्लॉट नहीं मिला। कृपया अन्य तिथि आज़माएँ या बुकिंग पृष्ठ पर जाएं।'
+                    : 'No open appointment slots were found on that date. Try clearing the date filter or choosing another weekday.'
+                  : isHi
+                    ? 'कृपया खोज शब्द बदलें या सभी फ़िल्टर रीसेट करें।'
+                    : 'Try adjusting your search keywords, specialization, or day filter.'}
             </p>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={handleClearFilters}
-                className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#1C7ED6] rounded-lg cursor-pointer"
-              >
-                {isHi ? 'सभी फ़िल्टर साफ़ करें' : 'Clear Filters'}
-              </button>
+              {doctors.length === 0 ? (
+                <button
+                  type="button"
+                  onClick={() => void refreshBootstrap()}
+                  className="min-h-[40px] inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#1C7ED6] rounded-lg cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{isHi ? 'पुनः लोड करें' : 'Reload Specialists'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="min-h-[40px] px-4 py-2 text-xs font-semibold text-white bg-[#1C7ED6] rounded-lg cursor-pointer"
+                >
+                  {isHi ? 'सभी फ़िल्टर साफ़ करें' : 'Clear Filters'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => navigate('/book')}
