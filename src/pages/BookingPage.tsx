@@ -51,6 +51,10 @@ export function BookingPage() {
     specializations,
     doctors,
     settings,
+    reviewSummary: _reviewSummary,
+    bootstrapLoading,
+    bootstrapError,
+    refreshBootstrap,
     user,
     bookingDraft,
     setBookingDraft,
@@ -82,12 +86,19 @@ export function BookingPage() {
   const [waitlistDoneId, setWaitlistDoneId] = useState<string | null>(null);
 
   const upcomingDates = useMemo(() => buildNext14Days(), []);
-  const selectedSpec = specializations.find((s) => s.id === bookingDraft.specializationId);
+  const availableSpecializations = useMemo(
+    () =>
+      Array.isArray(specializations)
+        ? specializations.filter((s) => Boolean(s && s.active !== false && s.id && s.name))
+        : [],
+    [specializations]
+  );
+  const selectedSpec = availableSpecializations.find((s) => s.id === bookingDraft.specializationId);
   const deptDoctors = useMemo(
     () =>
       bookingDraft.specializationId
-        ? doctors.filter((d) => d.specializationId === bookingDraft.specializationId)
-        : doctors,
+        ? doctors.filter((d) => d.active !== false && d.specializationId === bookingDraft.specializationId)
+        : doctors.filter((d) => d.active !== false),
     [doctors, bookingDraft.specializationId]
   );
   const selectedDoctor = doctors.find((d) => d.id === bookingDraft.doctorId);
@@ -386,52 +397,184 @@ export function BookingPage() {
           {/* STEP 1: SPECIALIZATION */}
           {activeStep === 1 && (
             <div className="space-y-5">
-              <h2 className="font-display text-xl font-bold text-[#0B2D52]">
-                {t.booking.selectSpecPrompt}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {specializations.map((spec) => {
-                  const selected = bookingDraft.specializationId === spec.id;
-                  const count = doctors.filter((d) => d.specializationId === spec.id).length;
-                  return (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-xl font-bold text-[#0B2D52]">
+                  {t.booking.selectSpecPrompt}
+                </h2>
+                {selectedSpec && (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#1C7ED6]">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    <span>{language === 'hi' ? selectedSpec.nameHi : selectedSpec.name}</span>
+                  </span>
+                )}
+              </div>
+
+              {bootstrapLoading ? (
+                <div className="space-y-4" aria-live="polite" aria-busy="true">
+                  <div className="flex items-center gap-2 text-xs font-medium text-[#5C6F84]">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#1C7ED6]" aria-hidden="true" />
+                    <span>
+                      {language === 'hi'
+                        ? 'चिकित्सा विभाग लोड हो रहे हैं...'
+                        : 'Loading available medical departments...'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                      <div
+                        key={idx}
+                        className="h-32 rounded-xl border border-[#E2EAF2] bg-[#F4F8FC] animate-pulse"
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : bootstrapError ? (
+                <div
+                  role="alert"
+                  className="border border-rose-200 rounded-xl p-6 bg-rose-50 text-sm text-rose-900 space-y-3"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
+                    <div className="space-y-1">
+                      <p className="font-semibold">
+                        {language === 'hi'
+                          ? 'चिकित्सा विभाग लोड करने में समस्या आई।'
+                          : 'Unable to load medical departments.'}
+                      </p>
+                      <p className="text-xs opacity-90">{bootstrapError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void refreshBootstrap()}
+                    className="min-h-[42px] px-4 py-2 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-lg"
+                  >
+                    {language === 'hi' ? 'पुनः प्रयास करें' : 'Retry'}
+                  </button>
+                </div>
+              ) : availableSpecializations.length === 0 ? (
+                <div className="border border-[#E2EAF2] rounded-xl p-6 bg-[#F4F8FC] space-y-3">
+                  <p className="text-sm text-[#10233B]">
+                    {language === 'hi'
+                      ? 'वर्तमान में ऑनलाइन बुकिंग के लिए कोई चिकित्सा विभाग उपलब्ध नहीं है। कृपया पुनः प्रयास करें या क्लिनिक से संपर्क करें।'
+                      : 'No medical departments are currently available for online booking. Please retry or contact clinic reception.'}
+                  </p>
+                  <div className="flex flex-wrap gap-2.5">
                     <button
-                      key={spec.id}
                       type="button"
-                      onClick={() => {
-                        setBookingDraft((prev) => ({
-                          ...prev,
-                          specializationId: spec.id,
-                          doctorId:
-                            prev.specializationId === spec.id ? prev.doctorId : '',
-                          timeSlot: '',
-                          step: 2,
-                        }));
-                      }}
-                      className={`text-left rounded-xl border p-5 transition-colors flex flex-col justify-between gap-3 ${
-                        selected
-                          ? 'border-[#1C7ED6] bg-[#EAF3FC]/50'
-                          : 'border-[#E2EAF2] bg-white hover:border-[#0B2D52]/40'
-                      }`}
+                      onClick={() => void refreshBootstrap()}
+                      className="min-h-[42px] px-4 py-2 text-xs font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] rounded-lg"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="w-10 h-10 rounded-lg bg-[#EAF3FC] text-[#1C7ED6] flex items-center justify-center">
-                          <SpecializationIcon iconKey={spec.iconKey} className="w-5 h-5" />
-                        </div>
-                        <span className="text-xs text-[#5C6F84] tabular-nums">
-                          {count} {language === 'hi' ? 'चिकित्सक' : count === 1 ? 'Doctor' : 'Doctors'}
-                        </span>
-                      </div>
-                      <div>
-                        <h3 className="font-display text-base font-bold text-[#0B2D52]">
-                          {language === 'hi' ? spec.nameHi : spec.name}
-                        </h3>
-                        <p className="text-xs text-[#5C6F84] mt-1 leading-relaxed">
-                          {language === 'hi' ? spec.shortDescriptionHi : spec.shortDescription}
-                        </p>
-                      </div>
+                      {language === 'hi' ? 'पुनः लोड करें' : 'Reload Departments'}
                     </button>
-                  );
-                })}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/contact')}
+                      className="min-h-[42px] px-4 py-2 text-xs font-semibold text-[#0B2D52] bg-white border border-[#E2EAF2] rounded-lg"
+                    >
+                      {t.nav.contact}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-100 visible"
+                  role="radiogroup"
+                  aria-label={t.booking.steps[0]}
+                >
+                  {availableSpecializations.map((spec) => {
+                    const selected = bookingDraft.specializationId === spec.id;
+                    const count = doctors.filter(
+                      (d) => d.active !== false && d.specializationId === spec.id
+                    ).length;
+                    return (
+                      <button
+                        key={spec.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => {
+                          setErrorMsg('');
+                          setBookingDraft((prev) => ({
+                            ...prev,
+                            specializationId: spec.id,
+                            doctorId: prev.specializationId === spec.id ? prev.doctorId : '',
+                            timeSlot: prev.specializationId === spec.id ? prev.timeSlot : '',
+                          }));
+                        }}
+                        className={`w-full min-w-0 min-h-[118px] text-left rounded-xl border p-4 sm:p-5 transition-colors flex flex-col justify-between gap-3 ${
+                          selected
+                            ? 'border-[#1C7ED6] ring-2 ring-[#1C7ED6]/25 bg-[#EAF3FC] dark:bg-[#1C7ED6]/20 dark:border-[#38BDF8]'
+                            : 'border-[#E2EAF2] bg-white dark:bg-[#0F2744] dark:border-[#1E3A5F] hover:border-[#1C7ED6]/60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <div
+                            className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                              selected
+                                ? 'bg-[#1C7ED6] text-white'
+                                : 'bg-[#EAF3FC] text-[#1C7ED6] dark:bg-[#163459] dark:text-[#60A5FA]'
+                            }`}
+                          >
+                            <SpecializationIcon iconKey={spec.iconKey} className="w-5 h-5" />
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs text-[#5C6F84] tabular-nums">
+                              {count} {language === 'hi' ? 'चिकित्सक' : count === 1 ? 'Doctor' : 'Doctors'}
+                            </span>
+                            {selected && (
+                              <span
+                                className="w-5 h-5 rounded-full bg-[#1C7ED6] text-white flex items-center justify-center shrink-0"
+                                aria-hidden="true"
+                              >
+                                <Check className="w-3 h-3" />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="min-w-0 w-full">
+                          <h3 className="font-display text-base font-bold text-[#0B2D52] break-words">
+                            {language === 'hi' ? spec.nameHi : spec.name}
+                          </h3>
+                          <p className="text-xs text-[#5C6F84] mt-1 leading-relaxed break-words">
+                            {language === 'hi' ? spec.shortDescriptionHi : spec.shortDescription}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="pt-4 border-t border-[#E2EAF2] flex items-center justify-between gap-3">
+                <p className="text-xs text-[#5C6F84]">
+                  {selectedSpec
+                    ? `${language === 'hi' ? 'चयनित विभाग:' : 'Selected:'} ${
+                        language === 'hi' ? selectedSpec.nameHi : selectedSpec.name
+                      }`
+                    : language === 'hi'
+                      ? 'आगे बढ़ने के लिए ऊपर एक विभाग चुनें।'
+                      : 'Select a department above to continue.'}
+                </p>
+                <button
+                  type="button"
+                  disabled={!selectedSpec || bootstrapLoading}
+                  onClick={() => {
+                    if (!selectedSpec) {
+                      setErrorMsg(
+                        language === 'hi'
+                          ? 'कृपया आगे बढ़ने से पहले एक चिकित्सा विभाग चुनें।'
+                          : 'Please select a medical department before continuing.'
+                      );
+                      return;
+                    }
+                    setStep(2);
+                  }}
+                  className="min-h-[44px] inline-flex items-center gap-1.5 px-5 py-2.5 text-sm font-semibold text-white bg-[#1C7ED6] hover:bg-[#1868B2] disabled:opacity-50 rounded-xl shrink-0"
+                >
+                  <span>{t.booking.next}</span>
+                  <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                </button>
               </div>
             </div>
           )}

@@ -63,6 +63,7 @@ interface ClinicContextValue {
   settings: ClinicSettings | null;
   reviewSummary: ReviewSummary | null;
   bootstrapLoading: boolean;
+  bootstrapError: string | null;
   bookingDraft: BookingDraft;
   setBookingDraft: React.Dispatch<React.SetStateAction<BookingDraft>>;
   resetBookingDraft: (preselect?: BookingPreselect) => void;
@@ -178,11 +179,12 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<UserProfile | null>(() => readStoredDemoUser());
   const [authLoading] = useState(false);
-  const [specializations] = useState<Specialization[]>(STATIC_SPECIALIZATIONS);
-  const [doctors] = useState<Doctor[]>(STATIC_DOCTORS);
+  const [specializations, setSpecializations] = useState<Specialization[]>(STATIC_SPECIALIZATIONS);
+  const [doctors, setDoctors] = useState<Doctor[]>(STATIC_DOCTORS);
   const [settings, setSettings] = useState<ClinicSettings | null>(STATIC_CLINIC_SETTINGS);
   const [reviewSummary] = useState<ReviewSummary | null>(STATIC_REVIEW_SUMMARY);
-  const [bootstrapLoading] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(() => {
     const storedUser = readStoredDemoUser();
     if (!storedUser) return INITIAL_DRAFT;
@@ -326,7 +328,26 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshBootstrap = useCallback(async () => {
-    // 100% static frontend data — no API fetch needed
+    setBootstrapLoading(true);
+    setBootstrapError(null);
+    try {
+      const validSpecs = Array.isArray(STATIC_SPECIALIZATIONS)
+        ? STATIC_SPECIALIZATIONS.filter((s) => Boolean(s && s.id && s.name))
+        : [];
+      const validDoctors = Array.isArray(STATIC_DOCTORS)
+        ? STATIC_DOCTORS.filter((d) => Boolean(d && d.id && d.name))
+        : [];
+      setSpecializations(validSpecs);
+      setDoctors(validDoctors);
+    } catch (err) {
+      setBootstrapError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Unable to load clinic departments and specialists.'
+      );
+    } finally {
+      setBootstrapLoading(false);
+    }
   }, []);
 
   const refreshAuth = useCallback(async () => {
@@ -443,6 +464,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         settings,
         reviewSummary,
         bootstrapLoading,
+        bootstrapError,
         bookingDraft,
         setBookingDraft,
         resetBookingDraft,

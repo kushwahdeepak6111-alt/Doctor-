@@ -37,15 +37,8 @@ export function Navbar() {
     navigate(path);
   };
 
-  const handleDepartmentNav = (specId: string) => {
+  const handleDepartmentNav = (_specId: string) => {
     setMobileOpen(false);
-    setBookingDraft((prev) => ({
-      ...prev,
-      specializationId: specId,
-      doctorId: '',
-      timeSlot: '',
-      step: 2,
-    }));
     navigate('/specializations');
   };
 
