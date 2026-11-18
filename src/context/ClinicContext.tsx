@@ -142,6 +142,12 @@ function readStoredDemoUser(): UserProfile | null {
   }
 }
 
+function normalizeRoutePath(pathname: string): string {
+  if (!pathname || pathname === '/') return '/';
+  const clean = pathname.replace(/\/+$/, '');
+  return clean || '/';
+}
+
 export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = safeGetStorage('arogya_lang');
@@ -171,7 +177,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const [route, setRoute] = useState<string>(() => {
     try {
       if (typeof window === 'undefined') return '/';
-      return window.location.pathname || '/';
+      return normalizeRoutePath(window.location.pathname || '/');
     } catch {
       return '/';
     }
@@ -257,7 +263,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const navigate = useCallback((nextPath: string) => {
     const normalized = nextPath.startsWith('/') ? nextPath : `/${nextPath}`;
-    const pathnameOnly = normalized.split('?')[0] || '/';
+    const pathnameOnly = normalizeRoutePath(normalized.split('?')[0] || '/');
     try {
       const currentFull = `${window.location.pathname}${window.location.search}`;
       if (currentFull !== normalized) {
@@ -311,7 +317,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       try {
-        setRoute(window.location.pathname || '/');
+        setRoute(normalizeRoutePath(window.location.pathname || '/'));
         const savedY =
           event.state && typeof event.state === 'object' && typeof event.state.scrollY === 'number'
             ? event.state.scrollY
