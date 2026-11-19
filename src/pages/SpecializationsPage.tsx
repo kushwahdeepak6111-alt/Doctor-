@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRight, Calendar, Check, Clock, RotateCcw, Search } from 'lucide-react';
+import { AlertCircle, ArrowRight, Calendar, Check, Clock, Loader2, RefreshCw, RotateCcw, Search } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { SpecializationIcon } from '../components/SpecializationIcon';
@@ -9,7 +9,16 @@ import type { WeekdayKey } from '../types/clinic';
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
 export function SpecializationsPage() {
-  const { language, specializations, doctors, navigate, startBookingWith } = useClinic();
+  const {
+    language,
+    specializations,
+    doctors,
+    bootstrapLoading,
+    bootstrapError,
+    refreshBootstrap,
+    navigate,
+    startBookingWith,
+  } = useClinic();
   const t = useT(language);
   const isHi = language === 'hi';
 
@@ -162,6 +171,54 @@ export function SpecializationsPage() {
       </section>
 
       <section className="max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16 space-y-6">
+        {bootstrapError && (
+          <div
+            role="alert"
+            className="border border-rose-200 rounded-2xl p-6 bg-rose-50 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="font-display text-sm font-bold">
+                  {isHi
+                    ? 'विशेषज्ञता सूची लोड करने में त्रुटि'
+                    : 'Unable to load specializations from Supabase'}
+                </p>
+                <p className="text-xs opacity-90">{bootstrapError}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void refreshBootstrap()}
+              className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-xl shrink-0 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{isHi ? 'पुनः प्रयास करें' : 'Retry'}</span>
+            </button>
+          </div>
+        )}
+
+        {bootstrapLoading && (
+          <div className="space-y-4" aria-live="polite" aria-busy="true">
+            <div className="flex items-center gap-2 text-xs font-medium text-[#5C6F84]">
+              <Loader2 className="w-4 h-4 animate-spin text-[#1C7ED6]" aria-hidden="true" />
+              <span>
+                {isHi
+                  ? 'Supabase से चिकित्सा विभाग और विशेषज्ञ लोड हो रहे हैं...'
+                  : 'Loading medical departments & specialists from Supabase...'}
+              </span>
+            </div>
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="h-[220px] rounded-2xl border border-[#E2EAF2] bg-[#F4F8FC] animate-pulse"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {usingDoctorFilter && (
           <div className="rounded-2xl border border-[#C5DDF8] bg-[#F4F8FC] p-5 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -226,7 +283,7 @@ export function SpecializationsPage() {
           </div>
         )}
 
-        {visibleSpecs.map((spec) => {
+        {!bootstrapLoading && visibleSpecs.map((spec) => {
           const deptDoctors = doctors.filter((d) => d.specializationId === spec.id);
           const conditions =
             language === 'hi' ? spec.commonConditionsHi : spec.commonConditions;

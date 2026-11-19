@@ -10,8 +10,6 @@ import type {
   UserProfile,
 } from '../types/clinic';
 import {
-  CLINIC_DOCTORS,
-  CLINIC_SPECIALIZATIONS,
   DEFAULT_CLINIC_SETTINGS,
   DEFAULT_REVIEW_SUMMARY,
   DEMO_USERS,
@@ -20,7 +18,6 @@ import {
   fetchClinicCatalogFromSupabase,
   savePatientProfileInSupabase,
 } from '../lib/clinicDb';
-import { isSupabaseConfigured } from '../lib/supabase';
 
 const DEMO_USER_STORAGE_KEY = 'arogya_demo_user_v1';
 
@@ -191,11 +188,11 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<UserProfile | null>(() => readStoredDemoUser());
   const [authLoading] = useState(false);
-  const [specializations, setSpecializations] = useState<Specialization[]>(CLINIC_SPECIALIZATIONS);
-  const [doctors, setDoctors] = useState<Doctor[]>(CLINIC_DOCTORS);
+  const [specializations, setSpecializations] = useState<Specialization[]>([]);
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [settings, setSettings] = useState<ClinicSettings | null>(DEFAULT_CLINIC_SETTINGS);
   const [reviewSummary] = useState<ReviewSummary | null>(DEFAULT_REVIEW_SUMMARY);
-  const [bootstrapLoading, setBootstrapLoading] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(true);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [supabaseSchemaMissing, setSupabaseSchemaMissing] = useState(false);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(() => {
@@ -349,10 +346,12 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
       setDoctors(catalog.doctors);
       setSupabaseSchemaMissing(catalog.schemaMissing);
     } catch (err) {
+      setSpecializations([]);
+      setDoctors([]);
       setBootstrapError(
         err instanceof Error && err.message
           ? err.message
-          : 'Unable to load clinic departments and specialists.'
+          : 'Unable to load doctors and specializations from Supabase.'
       );
     } finally {
       setBootstrapLoading(false);
@@ -361,9 +360,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isSupabaseConfigured()) {
-      void refreshBootstrap();
-    }
+    void refreshBootstrap();
   }, [refreshBootstrap]);
 
   const refreshAuth = useCallback(async () => {

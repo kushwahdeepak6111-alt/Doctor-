@@ -1,12 +1,20 @@
 import React from 'react';
-import { ArrowRight, CalendarCheck2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, CalendarCheck2, Loader2, RefreshCw } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
 import { SpecializationIcon } from '../SpecializationIcon';
 import { prefetchRoute } from '../../lib/routePrefetch';
 
 export function DepartmentsSection() {
-  const { language, navigate, specializations, startBookingWith } = useClinic();
+  const {
+    language,
+    navigate,
+    specializations,
+    bootstrapLoading,
+    bootstrapError,
+    refreshBootstrap,
+    startBookingWith,
+  } = useClinic();
   const t = useT(language);
 
   return (
@@ -40,54 +48,102 @@ export function DepartmentsSection() {
             </div>
           </div>
 
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {specializations.map((spec) => {
-              const name = language === 'hi' ? spec.nameHi : spec.name;
-              const desc = language === 'hi' ? spec.shortDescriptionHi : spec.shortDescription;
-              return (
-                <button
-                  key={spec.id}
-                  type="button"
-                  onClick={() => startBookingWith({ specializationId: spec.id })}
-                  onMouseEnter={() => prefetchRoute('/book')}
-                  onFocus={() => prefetchRoute('/book')}
-                  onTouchStart={() => prefetchRoute('/book')}
-                  className="text-left bg-white border border-[#E2EAF2] hover:border-[#1C7ED6] rounded-2xl p-5 space-y-3 shadow-xs hover:shadow-md transition-all group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-[#EAF3FC] text-[#1C7ED6] group-hover:bg-[#1C7ED6] group-hover:text-white flex items-center justify-center transition-colors">
-                    <SpecializationIcon iconKey={spec.iconKey} className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-sm font-bold text-[#0B2D52]">{name}</h3>
-                    <p className="text-xs text-[#5C6F84] mt-1 line-clamp-2 leading-relaxed">
-                      {desc}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-
-            {specializations.length < 6 && (
-              <button
-                type="button"
-                onClick={() => navigate('/book')}
-                onMouseEnter={() => prefetchRoute('/book')}
-                onFocus={() => prefetchRoute('/book')}
-                onTouchStart={() => prefetchRoute('/book')}
-                className="text-left bg-[#EAF3FC] border border-[#C5DDF8] hover:border-[#1C7ED6] rounded-2xl p-5 flex flex-col justify-between gap-3 transition-colors"
+          <div className="lg:col-span-7">
+            {bootstrapError ? (
+              <div
+                role="alert"
+                className="border border-rose-200 rounded-2xl p-6 bg-rose-50 text-rose-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
-                <div className="w-10 h-10 rounded-xl bg-[#1C7ED6] text-white flex items-center justify-center">
-                  <CalendarCheck2 className="w-5 h-5" aria-hidden="true" />
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" aria-hidden="true" />
+                  <div className="space-y-1">
+                    <p className="font-display text-sm font-bold">
+                      {language === 'hi'
+                        ? 'चिकित्सा विभाग लोड नहीं हो सके'
+                        : 'Unable to load specializations from Supabase'}
+                    </p>
+                    <p className="text-xs opacity-90">{bootstrapError}</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-display text-sm font-bold text-[#0B2D52]">
-                    {language === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Schedule Consultation'}
-                  </h3>
-                  <p className="text-xs text-[#195392] mt-1">
-                    {language === 'hi' ? 'उपलब्ध समय स्लॉट चुनें →' : 'Choose specialist & time slot →'}
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => void refreshBootstrap()}
+                  className="min-h-[40px] inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0B2D52] hover:bg-[#071A30] rounded-xl shrink-0 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>{language === 'hi' ? 'पुनः प्रयास करें' : 'Retry'}</span>
+                </button>
+              </div>
+            ) : bootstrapLoading ? (
+              <div className="space-y-3" aria-live="polite" aria-busy="true">
+                <div className="flex items-center gap-2 text-xs font-medium text-[#5C6F84]">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#1C7ED6]" aria-hidden="true" />
+                  <span>
+                    {language === 'hi'
+                      ? 'विभाग लोड हो रहे हैं...'
+                      : 'Loading specializations from Supabase...'}
+                  </span>
                 </div>
-              </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="h-[136px] rounded-2xl border border-[#E2EAF2] bg-white animate-pulse"
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {specializations.map((spec) => {
+                  const name = language === 'hi' ? spec.nameHi : spec.name;
+                  const desc = language === 'hi' ? spec.shortDescriptionHi : spec.shortDescription;
+                  return (
+                    <button
+                      key={spec.id}
+                      type="button"
+                      onClick={() => startBookingWith({ specializationId: spec.id })}
+                      onMouseEnter={() => prefetchRoute('/book')}
+                      onFocus={() => prefetchRoute('/book')}
+                      onTouchStart={() => prefetchRoute('/book')}
+                      className="text-left bg-white border border-[#E2EAF2] hover:border-[#1C7ED6] rounded-2xl p-5 space-y-3 shadow-xs hover:shadow-md transition-all group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[#EAF3FC] text-[#1C7ED6] group-hover:bg-[#1C7ED6] group-hover:text-white flex items-center justify-center transition-colors">
+                        <SpecializationIcon iconKey={spec.iconKey} className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-display text-sm font-bold text-[#0B2D52]">{name}</h3>
+                        <p className="text-xs text-[#5C6F84] mt-1 line-clamp-2 leading-relaxed">
+                          {desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {specializations.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/book')}
+                    onMouseEnter={() => prefetchRoute('/book')}
+                    onFocus={() => prefetchRoute('/book')}
+                    onTouchStart={() => prefetchRoute('/book')}
+                    className="text-left bg-[#EAF3FC] border border-[#C5DDF8] hover:border-[#1C7ED6] rounded-2xl p-5 flex flex-col justify-between gap-3 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-[#1C7ED6] text-white flex items-center justify-center">
+                      <CalendarCheck2 className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-sm font-bold text-[#0B2D52]">
+                        {language === 'hi' ? 'अपॉइंटमेंट बुक करें' : 'Schedule Consultation'}
+                      </h3>
+                      <p className="text-xs text-[#195392] mt-1">
+                        {language === 'hi' ? 'उपलब्ध समय स्लॉट चुनें →' : 'Choose specialist & time slot →'}
+                      </p>
+                    </div>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

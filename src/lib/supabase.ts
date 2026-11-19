@@ -1,14 +1,20 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim().replace(/\/+$/, '');
-const supabasePublishableKey = (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+export const supabaseUrl = 'https://wuevhosbpxoainntibpu.supabase.co';
+export const supabaseAnonKey = 'sb_publishable_K7yBgkKPCGmZGAS2ncyFjA_ferFkQ_T';
+
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});
 
 export function isSupabaseConfigured(): boolean {
-  return Boolean(supabaseUrl && supabasePublishableKey);
+  return Boolean(supabaseUrl && supabaseAnonKey);
 }
 
 export function getSupabaseProjectHost(): string {
-  if (!supabaseUrl) return '';
   try {
     return new URL(supabaseUrl).host;
   } catch {
@@ -16,17 +22,6 @@ export function getSupabaseProjectHost(): string {
   }
 }
 
-let cachedClient: SupabaseClient | null = null;
-
-export function getSupabaseClient(): SupabaseClient | null {
-  if (!isSupabaseConfigured()) return null;
-  if (!cachedClient) {
-    cachedClient = createClient(supabaseUrl, supabasePublishableKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-  }
-  return cachedClient;
+export function getSupabaseClient(): SupabaseClient {
+  return supabase;
 }
