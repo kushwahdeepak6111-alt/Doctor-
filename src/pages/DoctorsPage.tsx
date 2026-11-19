@@ -3,7 +3,7 @@ import { AlertCircle, Calendar, Filter, Loader2, RefreshCw, RotateCcw, Search } 
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { DoctorCard } from '../components/DoctorCard';
-import { searchDoctorsStatic } from '../data/clinicData';
+import { searchDoctors } from '../lib/clinicCatalog';
 import type { WeekdayKey } from '../types/clinic';
 
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -34,7 +34,7 @@ export function DoctorsPage() {
 
   const results = useMemo(
     () =>
-      searchDoctorsStatic({
+      searchDoctors({
         doctors,
         specializations,
         q: search,

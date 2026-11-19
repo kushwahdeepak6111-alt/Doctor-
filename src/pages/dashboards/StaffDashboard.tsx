@@ -13,10 +13,16 @@ import {
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import {
-  computeDoctorSlotsStatic,
+  computeDoctorSlots,
   readLocalAppointments,
-  saveLocalAppointment,
-} from '../../data/clinicData';
+} from '../../lib/clinicCatalog';
+import {
+  createAppointmentInSupabase,
+  fetchAppointmentsFromSupabase,
+  fetchContactMessagesFromSupabase,
+  updateAppointmentInSupabase,
+  updateContactMessageStatusInSupabase,
+} from '../../lib/clinicDb';
 import { useT } from '../../i18n/translations';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
 import { StatusIndicator } from '../../components/StatusIndicator';
@@ -34,8 +40,8 @@ export function StaffDashboard() {
     readLocalAppointments()
   );
   const [inquiries, setInquiries] = useState<ContactMessage[]>([]);
-  const loading = false;
-  const loadError = '';
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<'pending' | 'confirmed' | 'cancelled' | 'availability' | 'inquiries'>('pending');
   const [search, setSearch] = useState('');
   const [slipAppointmentId, setSlipAppointmentId] = useState<string | null>(null);
@@ -56,9 +62,29 @@ export function StaffDashboard() {
   const [assistEmail, setAssistEmail] = useState('');
   const [assistReason, setAssistReason] = useState('');
 
-  const loadOverview = useCallback(() => {
-    setAppointments(readLocalAppointments());
+  const loadOverview = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [apptRes, msgRes] = await Promise.all([
+        fetchAppointmentsFromSupabase(),
+        fetchContactMessagesFromSupabase(),
+      ]);
+      setAppointments(apptRes.appointments);
+      setInquiries(msgRes);
+    } catch (err) {
+      setAppointments(readLocalAppointments());
+      setLoadError(
+        err instanceof Error && err.message ? err.message : 'Unable to load desk overview.'
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadOverview();
+  }, [loadOverview]);
 
   useEffect(() => {
     if (!availDocId && doctors[0]?.id) setAvailDocId(doctors[0].id);
@@ -68,16 +94,16 @@ export function StaffDashboard() {
   const availSlots = useMemo(() => {
     const doc = doctors.find((d) => d.id === availDocId);
     if (!doc || !availDate) return [];
-    return computeDoctorSlotsStatic(doc, availDate, appointments);
+    return computeDoctorSlots(doc, availDate, appointments);
   }, [doctors, availDocId, availDate, appointments]);
 
   const assistSlots = useMemo(() => {
     const doc = doctors.find((d) => d.id === assistDocId);
     if (!assistOpen || !doc || !assistDate) return [];
-    return computeDoctorSlotsStatic(doc, assistDate, appointments);
+    return computeDoctorSlots(doc, assistDate, appointments);
   }, [assistOpen, doctors, assistDocId, assistDate, appointments]);
 
-  const updateStatus = (id: string, status: AppointmentStatus) => {
+  const updateStatus = async (id: string, status: AppointmentStatus) => {
     const existing = appointments.find((a) => a.id === id);
     if (!existing) return;
     const updated: Appointment = {
@@ -85,18 +111,28 @@ export function StaffDashboard() {
       status,
       updatedAt: new Date().toISOString(),
     };
-    setAppointments(saveLocalAppointment(updated));
-    addToast(language === 'hi' ? 'स्थिति अपडेट हो गई।' : `Appointment marked ${status}.`, 'success');
+    setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    try {
+      await updateAppointmentInSupabase(id, { status, updatedBy: user?.email });
+      addToast(language === 'hi' ? 'स्थिति अपडेट हो गई।' : `Appointment marked ${status}.`, 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to update status.', 'error');
+    }
   };
 
-  const handleMarkInquiryReviewed = (id: string) => {
+  const handleMarkInquiryReviewed = async (id: string) => {
     setInquiries((prev) =>
       prev.map((m) => (m.id === id ? { ...m, status: 'reviewed' } : m))
     );
+    try {
+      await updateContactMessageStatusInSupabase(id, 'reviewed');
+    } catch {
+      // Keep optimistic state
+    }
     addToast(language === 'hi' ? 'संदेश समीक्षित चिह्नित।' : 'Inquiry marked reviewed.', 'success');
   };
 
-  const handleAssistBook = (e: React.FormEvent) => {
+  const handleAssistBook = async (e: React.FormEvent) => {
     e.preventDefault();
     const doc = doctors.find((d) => d.id === assistDocId);
     if (!doc || !assistSlot) return;
@@ -120,18 +156,31 @@ export function StaffDashboard() {
       createdAt: nowIso,
       updatedAt: nowIso,
     };
-    setAppointments(saveLocalAppointment(newAppt));
-    setAssistSubmitting(false);
-    setAssistOpen(false);
-    setAssistName('');
-    setAssistPhone('');
-    setAssistEmail('');
-    setAssistReason('');
-    setAssistSlot('');
-    addToast(
-      language === 'hi' ? 'रोगी अपॉइंटमेंट कन्फर्म किया गया।' : 'Assisted appointment confirmed.',
-      'success'
-    );
+
+    try {
+      const res = await createAppointmentInSupabase(newAppt);
+      setAppointments((prev) => [res.data, ...prev]);
+      setAssistOpen(false);
+      setAssistName('');
+      setAssistPhone('');
+      setAssistEmail('');
+      setAssistReason('');
+      setAssistSlot('');
+      addToast(
+        res.persistedInSupabase
+          ? language === 'hi'
+            ? 'रोगी अपॉइंटमेंट Supabase में सहेजा गया।'
+            : 'Assisted appointment saved to Supabase.'
+          : language === 'hi'
+            ? 'रोगी अपॉइंटमेंट कन्फर्म किया गया।'
+            : 'Assisted appointment confirmed.',
+        'success'
+      );
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to create appointment.', 'error');
+    } finally {
+      setAssistSubmitting(false);
+    }
   };
 
   const filteredAppointments = useMemo(() => {

@@ -1,11 +1,27 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Star } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { STATIC_PUBLIC_REVIEWS } from '../../data/clinicData';
+import { DEFAULT_PUBLIC_REVIEWS } from '../../lib/clinicCatalog';
+import { fetchPublicReviewsFromSupabase } from '../../lib/clinicDb';
+import type { PublicPatientFeedback } from '../../types/clinic';
 
 export function PatientReviewsSection() {
   const { language, navigate } = useClinic();
-  const publicFeedbacks = STATIC_PUBLIC_REVIEWS;
+  const [publicFeedbacks, setPublicFeedbacks] = useState<PublicPatientFeedback[]>(DEFAULT_PUBLIC_REVIEWS);
+
+  useEffect(() => {
+    let active = true;
+    void fetchPublicReviewsFromSupabase()
+      .then((rows) => {
+        if (active && rows.length > 0) setPublicFeedbacks(rows);
+      })
+      .catch(() => {
+        // Keep DEFAULT_PUBLIC_REVIEWS on transient failure
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <section id="section-reviews" className="scroll-mt-16 bg-white border-t border-[#E2EAF2]">

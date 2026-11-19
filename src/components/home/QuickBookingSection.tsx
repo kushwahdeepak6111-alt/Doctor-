@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import { useT } from '../../i18n/translations';
-import { computeDoctorSlotsStatic } from '../../data/clinicData';
+import { computeDoctorSlots } from '../../lib/clinicCatalog';
 
 function getTomorrowStr(): string {
   const d = new Date();
@@ -41,7 +41,7 @@ export function QuickBookingSection() {
   const qbSlots = useMemo(() => {
     const doc = doctors.find((d) => d.id === qbDocId);
     if (!doc || !qbDate) return [];
-    return computeDoctorSlotsStatic(doc, qbDate).filter((s) => s.status === 'available');
+    return computeDoctorSlots(doc, qbDate).filter((s) => s.status === 'available');
   }, [doctors, qbDocId, qbDate]);
 
   useEffect(() => {

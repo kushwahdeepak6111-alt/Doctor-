@@ -9,14 +9,18 @@ import type {
   ThemeMode,
   UserProfile,
 } from '../types/clinic';
-import { STATIC_DOCTORS } from '../data/doctors';
 import {
-  STATIC_CLINIC_SETTINGS,
-  STATIC_DEMO_USERS,
-  STATIC_REVIEW_SUMMARY,
-  STATIC_SPECIALIZATIONS,
-} from '../data/clinicData';
-import { fetchClinicCatalog } from '../lib/clinicApi';
+  CLINIC_DOCTORS,
+  CLINIC_SPECIALIZATIONS,
+  DEFAULT_CLINIC_SETTINGS,
+  DEFAULT_REVIEW_SUMMARY,
+  DEMO_USERS,
+} from '../lib/clinicCatalog';
+import {
+  fetchClinicCatalogFromSupabase,
+  savePatientProfileInSupabase,
+} from '../lib/clinicDb';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const DEMO_USER_STORAGE_KEY = 'arogya_demo_user_v1';
 
@@ -65,6 +69,7 @@ interface ClinicContextValue {
   reviewSummary: ReviewSummary | null;
   bootstrapLoading: boolean;
   bootstrapError: string | null;
+  supabaseSchemaMissing: boolean;
   bookingDraft: BookingDraft;
   setBookingDraft: React.Dispatch<React.SetStateAction<BookingDraft>>;
   resetBookingDraft: (preselect?: BookingPreselect) => void;
@@ -186,12 +191,13 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   const [user, setUser] = useState<UserProfile | null>(() => readStoredDemoUser());
   const [authLoading] = useState(false);
-  const [specializations, setSpecializations] = useState<Specialization[]>(STATIC_SPECIALIZATIONS);
-  const [doctors, setDoctors] = useState<Doctor[]>(STATIC_DOCTORS);
-  const [settings, setSettings] = useState<ClinicSettings | null>(STATIC_CLINIC_SETTINGS);
-  const [reviewSummary] = useState<ReviewSummary | null>(STATIC_REVIEW_SUMMARY);
+  const [specializations, setSpecializations] = useState<Specialization[]>(CLINIC_SPECIALIZATIONS);
+  const [doctors, setDoctors] = useState<Doctor[]>(CLINIC_DOCTORS);
+  const [settings, setSettings] = useState<ClinicSettings | null>(DEFAULT_CLINIC_SETTINGS);
+  const [reviewSummary] = useState<ReviewSummary | null>(DEFAULT_REVIEW_SUMMARY);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [supabaseSchemaMissing, setSupabaseSchemaMissing] = useState(false);
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(() => {
     const storedUser = readStoredDemoUser();
     if (!storedUser) return INITIAL_DRAFT;
@@ -338,9 +344,10 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     setBootstrapLoading(true);
     setBootstrapError(null);
     try {
-      const catalog = await fetchClinicCatalog();
+      const catalog = await fetchClinicCatalogFromSupabase();
       setSpecializations(catalog.specializations);
       setDoctors(catalog.doctors);
+      setSupabaseSchemaMissing(catalog.schemaMissing);
     } catch (err) {
       setBootstrapError(
         err instanceof Error && err.message
@@ -354,10 +361,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const hasSupabaseEnv = Boolean(
-      import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-    );
-    if (hasSupabaseEnv) {
+    if (isSupabaseConfigured()) {
       void refreshBootstrap();
     }
   }, [refreshBootstrap]);
@@ -371,7 +375,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
     if (!normalizedEmail || password.length < 6) {
       throw new Error('Invalid email or password.');
     }
-    const matched = STATIC_DEMO_USERS.find((u) => u.email.toLowerCase() === normalizedEmail);
+    const matched = DEMO_USERS.find((u) => u.email.toLowerCase() === normalizedEmail);
     if (!matched || password !== 'ClinicDemo#2026') {
       throw new Error('Invalid demo credentials. Use password ClinicDemo#2026 for demo accounts.');
     }
@@ -389,7 +393,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
   const register = useCallback(
     async (payload: { name: string; email: string; phone: string; password: string }) => {
       const created: UserProfile = {
-        id: `demo-patient-${Date.now()}`,
+        id: `patient-${Date.now()}`,
         email: payload.email.trim(),
         name: payload.name.trim(),
         phone: payload.phone.trim(),
@@ -397,6 +401,11 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         preferredLanguage: language,
         createdAt: new Date().toISOString(),
       };
+      try {
+        await savePatientProfileInSupabase(created);
+      } catch {
+        // Keep local patient session available even if Supabase schema isn't initialized yet
+      }
       safeSetStorage(DEMO_USER_STORAGE_KEY, JSON.stringify(created));
       setUser(created);
       setBookingDraft((prev) => ({
@@ -477,6 +486,7 @@ export function ClinicProvider({ children }: { children: React.ReactNode }) {
         reviewSummary,
         bootstrapLoading,
         bootstrapError,
+        supabaseSchemaMissing,
         bookingDraft,
         setBookingDraft,
         resetBookingDraft,

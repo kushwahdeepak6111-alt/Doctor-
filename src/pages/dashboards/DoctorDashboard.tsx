@@ -1,7 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Calendar, Clock, FileText, LogOut, RefreshCw, Save } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
-import { readLocalAppointments, saveLocalAppointment } from '../../data/clinicData';
+import { readLocalAppointments, saveLocalAppointment } from '../../lib/clinicCatalog';
+import {
+  fetchAppointmentsFromSupabase,
+  updateAppointmentInSupabase,
+} from '../../lib/clinicDb';
 import { useT, WEEKDAY_LABELS } from '../../i18n/translations';
 import { StatusIndicator } from '../../components/StatusIndicator';
 import type { Appointment, AppointmentStatus, WeekdayKey, WeeklySchedule } from '../../types/clinic';
@@ -20,8 +24,8 @@ export function DoctorDashboard() {
   const [appointments, setAppointments] = useState<Appointment[]>(() =>
     readLocalAppointments()
   );
-  const loading = false;
-  const loadError = '';
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<'today' | 'upcoming' | 'all' | 'schedule'>('today');
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
@@ -40,15 +44,30 @@ export function DoctorDashboard() {
     }
   }, [myDoctor]);
 
-  const loadAppointments = useCallback(() => {
-    const all = readLocalAppointments();
-    setAppointments(all);
-    const notesMap: Record<string, string> = {};
-    for (const a of all) {
-      notesMap[a.id] = a.clinicNotes || '';
+  const loadAppointments = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const res = await fetchAppointmentsFromSupabase();
+      setAppointments(res.appointments);
+      const notesMap: Record<string, string> = {};
+      for (const a of res.appointments) {
+        notesMap[a.id] = a.clinicNotes || '';
+      }
+      setNoteDrafts(notesMap);
+    } catch (err) {
+      setAppointments(readLocalAppointments());
+      setLoadError(
+        err instanceof Error && err.message ? err.message : 'Unable to load appointments.'
+      );
+    } finally {
+      setLoading(false);
     }
-    setNoteDrafts(notesMap);
   }, []);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -65,7 +84,7 @@ export function DoctorDashboard() {
     [appointments, todayStr]
   );
 
-  const updateAppointment = (
+  const updateAppointment = async (
     id: string,
     payload: { status?: AppointmentStatus; clinicNotes?: string }
   ) => {
@@ -78,7 +97,18 @@ export function DoctorDashboard() {
       updatedAt: new Date().toISOString(),
     };
     setAppointments(saveLocalAppointment(updated));
-    addToast(language === 'hi' ? 'अपॉइंटमेंट अपडेट किया गया।' : 'Appointment updated.', 'success');
+    try {
+      await updateAppointmentInSupabase(id, {
+        ...payload,
+        updatedBy: user?.email,
+      });
+      addToast(language === 'hi' ? 'अपॉइंटमेंट अपडेट किया गया।' : 'Appointment updated.', 'success');
+    } catch (err) {
+      addToast(
+        err instanceof Error ? err.message : 'Unable to sync appointment update.',
+        'error'
+      );
+    }
   };
 
   const handleSaveSchedule = () => {

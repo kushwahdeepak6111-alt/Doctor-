@@ -5,6 +5,8 @@ import { useT } from '../i18n/translations';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { ClinicLocationSection } from '../components/ClinicLocationSection';
 import { getPhoneCallHref, getWhatsAppHref } from '../lib/contactLinks';
+import { createContactMessageInSupabase } from '../lib/clinicDb';
+import type { ContactMessage } from '../types/clinic';
 
 export function ContactPage() {
   const { language, settings, addToast } = useClinic();
@@ -21,7 +23,7 @@ export function ContactPage() {
 
   const [sentWhatsAppHref, setSentWhatsAppHref] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!name.trim() || !/^\S+@\S+\.\S+$/.test(email.trim()) || !message.trim()) {
@@ -43,15 +45,43 @@ export function ContactPage() {
       .filter(Boolean)
       .join('\n');
 
-    setSentWhatsAppHref(getWhatsAppHref(settings?.phone, language, waText));
-    setSent(true);
-    setName('');
-    setEmail('');
-    setPhone('');
-    setSubject('');
-    setMessage('');
-    setSending(false);
-    addToast(t.contactSection.success, 'success');
+    const msgPayload: ContactMessage = {
+      id: `msg-${Date.now()}`,
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      subject: subject.trim() || 'Clinic Inquiry',
+      message: message.trim(),
+      status: 'new',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const res = await createContactMessageInSupabase(msgPayload);
+      setSentWhatsAppHref(getWhatsAppHref(settings?.phone, language, waText));
+      setSent(true);
+      setName('');
+      setEmail('');
+      setPhone('');
+      setSubject('');
+      setMessage('');
+      addToast(
+        res.persistedInSupabase
+          ? language === 'hi'
+            ? 'संदेश Supabase डेटाबेस में सहेजा गया।'
+            : 'Message saved to clinic database.'
+          : t.contactSection.success,
+        'success'
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Unable to send message. Please try again.'
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
-import { readLocalAppointments } from '../data/clinicData';
+import { readLocalAppointments } from '../lib/clinicCatalog';
 import { downloadAppointmentSlipPdf } from '../lib/slipGenerator';
 import type { Appointment, AppointmentSlipData } from '../types/clinic';
 import { ClinicLogo } from './ClinicLogo';

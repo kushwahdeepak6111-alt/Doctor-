@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
 import { useT } from '../i18n/translations';
-import { CLINIC_FAQ_ITEMS } from '../data/faqItems';
+import { CLINIC_FAQ_ITEMS } from '../lib/clinicCatalog';
 
 export function FaqPage() {
   const { language, navigate } = useClinic();

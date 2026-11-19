@@ -15,10 +15,18 @@ import {
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import {
-  computeDoctorSlotsStatic,
+  computeDoctorSlots,
   readLocalAppointments,
   saveLocalAppointment,
-} from '../../data/clinicData';
+} from '../../lib/clinicCatalog';
+import {
+  createPatientFeedbackInSupabase,
+  fetchAllFeedbackFromSupabase,
+  fetchAppointmentsFromSupabase,
+  fetchWaitlistEntriesFromSupabase,
+  updateAppointmentInSupabase,
+  updateWaitlistStatusInSupabase,
+} from '../../lib/clinicDb';
 import { useT } from '../../i18n/translations';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
 import { StatusIndicator } from '../../components/StatusIndicator';
@@ -61,8 +69,8 @@ export function PatientDashboard() {
   ]);
   const [myFeedbacks, setMyFeedbacks] = useState<PatientFeedback[]>([]);
   const [waitlistEntries, setWaitlistEntries] = useState<AppointmentWaitlistEntry[]>([]);
-  const loading = false;
-  const loadError = '';
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [tab, setTab] = useState<
     'upcoming' | 'pending' | 'history' | 'waitlist' | 'notifications' | 'profile'
   >('upcoming');
@@ -81,9 +89,31 @@ export function PatientDashboard() {
   const [profilePhone, setProfilePhone] = useState(user?.phone || '');
   const [savingProfile, setSavingProfile] = useState(false);
 
-  const loadData = useCallback(() => {
-    setAppointments(readLocalAppointments());
-  }, []);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [apptRes, fbRes, waitRes] = await Promise.all([
+        fetchAppointmentsFromSupabase(),
+        fetchAllFeedbackFromSupabase(user?.id),
+        fetchWaitlistEntriesFromSupabase(user?.id),
+      ]);
+      setAppointments(apptRes.appointments);
+      setMyFeedbacks(fbRes);
+      setWaitlistEntries(waitRes);
+    } catch (err) {
+      setAppointments(readLocalAppointments());
+      setLoadError(
+        err instanceof Error && err.message ? err.message : 'Unable to sync portal records.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   useEffect(() => {
     if (user) {
@@ -124,7 +154,7 @@ export function PatientDashboard() {
   const nextConfirmed = confirmedList[0];
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const handleCancel = (id: string) => {
+  const handleCancel = async (id: string) => {
     const existing = appointments.find((a) => a.id === id);
     if (!existing) return;
     const updated: Appointment = {
@@ -134,14 +164,27 @@ export function PatientDashboard() {
     };
     const nextList = saveLocalAppointment(updated);
     setAppointments(nextList);
-    addToast(isHi ? 'अपॉइंटमेंट रद्द कर दिया गया।' : 'Appointment cancelled.', 'info');
+    try {
+      await updateAppointmentInSupabase(id, {
+        status: 'cancelled',
+        updatedBy: user?.email,
+      });
+      addToast(isHi ? 'अपॉइंटमेंट रद्द कर दिया गया।' : 'Appointment cancelled.', 'info');
+    } catch (err) {
+      addToast(
+        err instanceof Error ? err.message : 'Unable to sync cancellation.',
+        'error'
+      );
+    }
   };
 
-  const handleSubmitFeedback = (e: React.FormEvent, appointmentId: string) => {
+  const handleSubmitFeedback = async (e: React.FormEvent, appointmentId: string) => {
     e.preventDefault();
     const appt = appointments.find((a) => a.id === appointmentId);
     if (!appt) return;
     setFbSubmitting(true);
+    const doc = doctors.find((d) => d.id === appt.doctorId);
+    const spec = specializations.find((s) => s.id === appt.specializationId);
     const created: PatientFeedback = {
       id: `fb-${Date.now()}`,
       appointmentId,
@@ -156,24 +199,49 @@ export function PatientDashboard() {
       verifiedVisit: true,
       createdAt: new Date().toISOString(),
     };
-    setMyFeedbacks((prev) => [created, ...prev]);
-    setFbSubmitting(false);
-    setFeedbackOpenApptId(null);
-    setFbComment('');
-    setFbDoctorFeedback('');
-    setFbRating(5);
-    addToast(
-      isHi
-        ? 'प्रतिक्रिया स्थानीय रूप से सहेजी गई।'
-        : 'Verified feedback recorded locally.',
-      'success'
-    );
+
+    try {
+      const res = await createPatientFeedbackInSupabase({
+        feedback: created,
+        doctorName: doc?.name || appt.doctorId,
+        doctorNameHi: doc?.nameHi || doc?.name || appt.doctorId,
+        specializationName: spec?.name || doc?.speciality || '',
+        specializationNameHi: spec?.nameHi || doc?.specialityHi || '',
+      });
+      setMyFeedbacks((prev) => [res.data, ...prev]);
+      setFeedbackOpenApptId(null);
+      setFbComment('');
+      setFbDoctorFeedback('');
+      setFbRating(5);
+      addToast(
+        res.persistedInSupabase
+          ? isHi
+            ? 'प्रतिक्रिया Supabase डेटाबेस में सहेजी गई।'
+            : 'Verified feedback submitted to clinic database.'
+          : isHi
+            ? 'प्रतिक्रिया स्थानीय रूप से सहेजी गई।'
+            : 'Verified feedback recorded locally.',
+        'success'
+      );
+    } catch (err) {
+      addToast(
+        err instanceof Error ? err.message : 'Failed to submit feedback.',
+        'error'
+      );
+    } finally {
+      setFbSubmitting(false);
+    }
   };
 
-  const handleWithdrawWaitlist = (waitlistId: string) => {
+  const handleWithdrawWaitlist = async (waitlistId: string) => {
     setWaitlistEntries((prev) =>
       prev.map((w) => (w.id === waitlistId ? { ...w, status: 'withdrawn' } : w))
     );
+    try {
+      await updateWaitlistStatusInSupabase(waitlistId, 'withdrawn');
+    } catch {
+      // Keep local update
+    }
     addToast(
       isHi ? 'प्रतीक्षा सूची अनुरोध वापस ले लिया गया।' : 'Waitlist entry withdrawn.',
       'info'
@@ -185,7 +253,7 @@ export function PatientDashboard() {
     const { date, timeSlot } = entry.notifiedSlot;
     const doc = doctors.find((d) => d.id === entry.doctorId);
     const stillOpen = doc
-      ? computeDoctorSlotsStatic(doc, date, appointments).some(
+      ? computeDoctorSlots(doc, date, appointments).some(
           (s) => s.time === timeSlot && s.status === 'available'
         )
       : true;

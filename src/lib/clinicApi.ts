@@ -1,5 +1,4 @@
-import { STATIC_DOCTORS } from '../data/doctors';
-import { STATIC_SPECIALIZATIONS } from '../data/clinicData';
+import { CLINIC_DOCTORS, CLINIC_SPECIALIZATIONS } from './clinicCatalog';
 import { resolveClinicImage } from './clinicImages';
 import type { Doctor, Specialization } from '../types/clinic';
 
@@ -82,28 +81,33 @@ function normalizeSpecializationRow(raw: Record<string, unknown>): Specializatio
   const id = String(raw.id || '').trim();
   const name = String(raw.name || '').trim();
   if (!id || !name) return null;
-  const fallback = STATIC_SPECIALIZATIONS.find((s) => s.id === id);
+  const fallback = CLINIC_SPECIALIZATIONS.find((s) => s.id === id);
+
+  const rawShortDesc = String(raw.short_description ?? raw.shortDescription ?? '').trim();
+  const rawShortDescHi = String(raw.short_description_hi ?? raw.shortDescriptionHi ?? '').trim();
+  const rawOverview = String(raw.overview ?? '').trim();
+  const rawOverviewHi = String(raw.overview_hi ?? raw.overviewHi ?? '').trim();
+  const rawConditions = raw.common_conditions ?? raw.commonConditions;
+  const rawConditionsHi = raw.common_conditions_hi ?? raw.commonConditionsHi;
 
   return {
     id,
     slug: String(raw.slug || fallback?.slug || id),
     name,
     nameHi: String(raw.name_hi ?? raw.nameHi ?? fallback?.nameHi ?? name),
-    shortDescription: String(
-      raw.short_description ?? raw.shortDescription ?? fallback?.shortDescription ?? ''
-    ),
-    shortDescriptionHi: String(
-      raw.short_description_hi ?? raw.shortDescriptionHi ?? fallback?.shortDescriptionHi ?? ''
-    ),
-    overview: String(raw.overview ?? fallback?.overview ?? ''),
-    overviewHi: String(raw.overview_hi ?? raw.overviewHi ?? fallback?.overviewHi ?? ''),
+    shortDescription: rawShortDesc || fallback?.shortDescription || '',
+    shortDescriptionHi: rawShortDescHi || fallback?.shortDescriptionHi || '',
+    overview: rawOverview || fallback?.overview || '',
+    overviewHi: rawOverviewHi || fallback?.overviewHi || '',
     iconKey: (raw.icon_key ?? raw.iconKey ?? fallback?.iconKey ?? 'stethoscope') as Specialization['iconKey'],
-    commonConditions: Array.isArray(raw.common_conditions ?? raw.commonConditions)
-      ? ((raw.common_conditions ?? raw.commonConditions) as string[])
-      : fallback?.commonConditions || [],
-    commonConditionsHi: Array.isArray(raw.common_conditions_hi ?? raw.commonConditionsHi)
-      ? ((raw.common_conditions_hi ?? raw.commonConditionsHi) as string[])
-      : fallback?.commonConditionsHi || [],
+    commonConditions:
+      Array.isArray(rawConditions) && rawConditions.length > 0
+        ? (rawConditions as string[])
+        : fallback?.commonConditions || [],
+    commonConditionsHi:
+      Array.isArray(rawConditionsHi) && rawConditionsHi.length > 0
+        ? (rawConditionsHi as string[])
+        : fallback?.commonConditionsHi || [],
     active: raw.active !== false,
   };
 }
@@ -112,10 +116,14 @@ function normalizeDoctorRow(raw: Record<string, unknown>): Doctor | null {
   const id = String(raw.id || '').trim();
   const name = String(raw.name || '').trim();
   if (!id || !name) return null;
-  const fallback = STATIC_DOCTORS.find((d) => d.id === id || d.slug === raw.slug);
+  const fallback = CLINIC_DOCTORS.find((d) => d.id === id || d.slug === raw.slug);
   const imageKey = String(raw.image_key ?? raw.imageKey ?? fallback?.imageKey ?? 'doctor_general_physician');
   const rawPhoto = String(raw.photo || '').trim();
   const feeNum = Number(raw.fees ?? raw.consultation_fee ?? raw.consultationFee ?? fallback?.fees ?? 600);
+  const scheduleObj =
+    raw.schedule && typeof raw.schedule === 'object' && Object.keys(raw.schedule as object).length > 0
+      ? (raw.schedule as Doctor['schedule'])
+      : fallback?.schedule || CLINIC_DOCTORS[0].schedule;
 
   return {
     id,
@@ -154,10 +162,7 @@ function normalizeDoctorRow(raw: Record<string, unknown>): Doctor | null {
       ? ((raw.languages_hi ?? raw.languagesHi) as string[])
       : fallback?.languagesHi || ['अंग्रेज़ी', 'हिन्दी'],
     active: raw.active !== false,
-    schedule:
-      raw.schedule && typeof raw.schedule === 'object'
-        ? (raw.schedule as Doctor['schedule'])
-        : fallback?.schedule || STATIC_DOCTORS[0].schedule,
+    schedule: scheduleObj,
     unavailableDates: Array.isArray(raw.unavailable_dates ?? raw.unavailableDates)
       ? ((raw.unavailable_dates ?? raw.unavailableDates) as string[])
       : undefined,
@@ -181,8 +186,8 @@ export async function fetchClinicCatalog(): Promise<ClinicCatalogResult> {
 
   if (!supabaseUrl || !supabaseKey) {
     return {
-      specializations: STATIC_SPECIALIZATIONS,
-      doctors: STATIC_DOCTORS,
+      specializations: CLINIC_SPECIALIZATIONS,
+      doctors: CLINIC_DOCTORS,
       source: 'verified-fallback',
     };
   }
@@ -224,16 +229,16 @@ export async function fetchClinicCatalog(): Promise<ClinicCatalogResult> {
     }
 
     return {
-      specializations: parsedSpecs.length > 0 ? parsedSpecs : STATIC_SPECIALIZATIONS,
-      doctors: parsedDocs.length > 0 ? parsedDocs : STATIC_DOCTORS,
+      specializations: parsedSpecs.length > 0 ? parsedSpecs : CLINIC_SPECIALIZATIONS,
+      doctors: parsedDocs.length > 0 ? parsedDocs : CLINIC_DOCTORS,
       source: 'verified-fallback',
     };
   } catch (err) {
     // PGRST205 means Supabase project is reachable, but clinic tables are not yet created/seeded.
     if (err instanceof ClinicApiResponseError && err.code === 'PGRST205') {
       return {
-        specializations: STATIC_SPECIALIZATIONS,
-        doctors: STATIC_DOCTORS,
+        specializations: CLINIC_SPECIALIZATIONS,
+        doctors: CLINIC_DOCTORS,
         source: 'verified-fallback',
         warning: 'Supabase schema tables (doctors/specializations) are not yet provisioned; loaded verified clinic catalog.',
       };

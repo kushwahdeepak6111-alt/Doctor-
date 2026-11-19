@@ -3,7 +3,7 @@ import { ArrowRight, Calendar, Check, Clock, RotateCcw, Search } from 'lucide-re
 import { useClinic } from '../context/ClinicContext';
 import { useT, WEEKDAY_LABELS } from '../i18n/translations';
 import { SpecializationIcon } from '../components/SpecializationIcon';
-import { searchDoctorsStatic } from '../data/clinicData';
+import { searchDoctors } from '../lib/clinicCatalog';
 import type { WeekdayKey } from '../types/clinic';
 
 const WEEKDAYS: WeekdayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -23,7 +23,7 @@ export function SpecializationsPage() {
 
   const searchResults = useMemo(
     () =>
-      searchDoctorsStatic({
+      searchDoctors({
         doctors,
         specializations,
         q: searchQuery,

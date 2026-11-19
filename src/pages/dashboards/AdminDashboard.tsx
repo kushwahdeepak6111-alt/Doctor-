@@ -1,10 +1,12 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BarChart3,
   Bell,
   BriefcaseMedical,
   Calendar,
+  CheckCircle2,
+  Database,
   Download,
   FileSpreadsheet,
   FileText,
@@ -27,12 +29,24 @@ import {
 } from 'lucide-react';
 import { useClinic } from '../../context/ClinicContext';
 import {
-  STATIC_CLINIC_SETTINGS,
-  STATIC_DEMO_USERS,
-  STATIC_PUBLIC_REVIEWS,
+  DEFAULT_CLINIC_SETTINGS,
+  DEFAULT_PUBLIC_REVIEWS,
+  DEMO_USERS,
   readLocalAppointments,
   saveLocalAppointment,
-} from '../../data/clinicData';
+} from '../../lib/clinicCatalog';
+import {
+  checkSupabaseTablesHealth,
+  fetchAllFeedbackFromSupabase,
+  fetchAppointmentsFromSupabase,
+  fetchContactMessagesFromSupabase,
+  fetchWaitlistEntriesFromSupabase,
+  updateAppointmentInSupabase,
+  updateContactMessageStatusInSupabase,
+  updateFeedbackStatusInSupabase,
+  updateWaitlistStatusInSupabase,
+} from '../../lib/clinicDb';
+import { getSupabaseProjectHost } from '../../lib/supabase';
 import { useT } from '../../i18n/translations';
 import { AdminSeoPanel } from '../../components/AdminSeoPanel';
 import { AppointmentSlipModal } from '../../components/AppointmentSlipModal';
@@ -89,15 +103,21 @@ export function AdminDashboard() {
   );
   const [doctors, setDoctors] = useState<Doctor[]>(contextDoctors);
   const [specializations, setSpecializations] = useState<Specialization[]>(contextSpecs);
-  const [users, setUsers] = useState<UserProfile[]>(STATIC_DEMO_USERS);
+  const [users, setUsers] = useState<UserProfile[]>(DEMO_USERS);
   const [contactMessages, setContactMessages] = useState<ContactMessage[]>([]);
   const [auditLogs] = useState<AuditLogEntry[]>([]);
   const [inquiryFilter, setInquiryFilter] = useState<'all' | 'new' | 'reviewed'>('all');
   const [settingsForm, setSettingsForm] = useState<ClinicSettings | null>(
-    contextSettings || STATIC_CLINIC_SETTINGS
+    contextSettings || DEFAULT_CLINIC_SETTINGS
   );
-  const loading = false;
-  const loadError = '';
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [dbHealth, setDbHealth] = useState<{
+    configured: boolean;
+    connected: boolean;
+    tablesReady: boolean;
+    missingTables: string[];
+  } | null>(null);
 
   // Table state
   const [search, setSearch] = useState('');
@@ -140,7 +160,7 @@ export function AdminDashboard() {
     patientName: string;
   };
   const [feedbackRows, setFeedbackRows] = useState<AdminFeedbackRow[]>(() =>
-    STATIC_PUBLIC_REVIEWS.map((r, idx) => ({
+    DEFAULT_PUBLIC_REVIEWS.map((r, idx) => ({
       id: r.id,
       appointmentId: `appt-${1001 + idx}`,
       patientId: 'user-patient-1',
@@ -173,8 +193,8 @@ export function AdminDashboard() {
   >({
     in_app: { configured: true, note: 'Active' },
     whatsapp: { configured: true, note: 'Direct WhatsApp link' },
-    sms: { configured: false, note: 'Static demo mode' },
-    email: { configured: false, note: 'Static demo mode' },
+    sms: { configured: false, note: 'WhatsApp & Supabase active' },
+    email: { configured: false, note: 'WhatsApp & Supabase active' },
   });
   const [waitFilterDoc, setWaitFilterDoc] = useState('all');
   const [waitFilterStatus, setWaitFilterStatus] = useState('all');
@@ -182,10 +202,64 @@ export function AdminDashboard() {
   const [waitFilterSearch, setWaitFilterSearch] = useState('');
   const waitLoading = false;
 
-  const loadAdminData = useCallback(() => {
-    setAppointments(readLocalAppointments());
-    addToast(language === 'hi' ? 'डेटा रीफ़्रेश किया गया।' : 'Local clinic data refreshed.', 'info');
-  }, [addToast, language]);
+  const loadAdminData = useCallback(async (showToast = false) => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [apptRes, msgRes, fbRes, waitRes, health] = await Promise.all([
+        fetchAppointmentsFromSupabase(),
+        fetchContactMessagesFromSupabase(),
+        fetchAllFeedbackFromSupabase(),
+        fetchWaitlistEntriesFromSupabase(),
+        checkSupabaseTablesHealth(),
+      ]);
+      setAppointments(apptRes.appointments);
+      setContactMessages(msgRes);
+      setDbHealth(health);
+
+      if (fbRes.length > 0) {
+        setFeedbackRows(
+          fbRes.map((f) => ({
+            ...f,
+            appointmentReference: f.appointmentId || f.id,
+            patientName: f.patientId || 'Verified Patient',
+          }))
+        );
+      }
+
+      if (waitRes.length > 0) {
+        setWaitlistRows(
+          waitRes.map((w) => {
+            const doc = contextDoctors.find((d) => d.id === w.doctorId);
+            const spec = contextSpecs.find((s) => s.id === w.specializationId);
+            return {
+              ...w,
+              doctorName: doc?.name || w.doctorId,
+              specializationName: spec?.name || w.specializationId,
+            };
+          })
+        );
+      }
+
+      if (showToast) {
+        addToast(
+          language === 'hi' ? 'Supabase डेटा रीफ़्रेश किया गया।' : 'Clinic & Supabase data refreshed.',
+          'info'
+        );
+      }
+    } catch (err) {
+      setAppointments(readLocalAppointments());
+      setLoadError(
+        err instanceof Error && err.message ? err.message : 'Unable to load admin data.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [addToast, contextDoctors, contextSpecs, language]);
+
+  useEffect(() => {
+    void loadAdminData(false);
+  }, [loadAdminData]);
 
   const reportData = useMemo(() => {
     const q = repSearch.trim().toLowerCase();
@@ -252,12 +326,12 @@ export function AdminDashboard() {
     return { summary, doctorDistribution, rows };
   }, [appointments, doctors, specializations, repStartDate, repEndDate, repDoctorId, repSpecId, repStatus, repSearch]);
 
-  const loadAdminFeedback = () => {
-    addToast('Feedback list refreshed.', 'info');
+  const loadAdminFeedback = async () => {
+    await loadAdminData(true);
   };
 
-  const loadAdminWaitlist = () => {
-    addToast('Waitlist queue refreshed.', 'info');
+  const loadAdminWaitlist = async () => {
+    await loadAdminData(true);
   };
 
   // Real DB KPI Counts
@@ -326,12 +400,17 @@ export function AdminDashboard() {
     return Array.from(map.values());
   }, [users, appointments]);
 
-  const handleUpdateApptStatus = (id: string, status: AppointmentStatus) => {
+  const handleUpdateApptStatus = async (id: string, status: AppointmentStatus) => {
     const existing = appointments.find((a) => a.id === id);
     if (!existing) return;
     const updated: Appointment = { ...existing, status, updatedAt: new Date().toISOString() };
     setAppointments(saveLocalAppointment(updated));
-    addToast(`Appointment updated to ${status}.`, 'success');
+    try {
+      await updateAppointmentInSupabase(id, { status, updatedBy: user?.email });
+      addToast(`Appointment updated to ${status}.`, 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Failed to update status.', 'error');
+    }
   };
 
   const handleAddDoctor = (e: React.FormEvent) => {
@@ -438,18 +517,33 @@ export function AdminDashboard() {
     }
   };
 
-  const handleModerateFeedback = (id: string, status: FeedbackStatus) => {
+  const handleModerateFeedback = async (id: string, status: FeedbackStatus) => {
     setFeedbackRows((prev) => prev.map((f) => (f.id === id ? { ...f, status } : f)));
+    try {
+      await updateFeedbackStatusInSupabase(id, status);
+    } catch {
+      // Keep optimistic state
+    }
     addToast(`Feedback marked as ${status}.`, 'success');
   };
 
-  const handleCancelWaitlistEntry = (id: string) => {
+  const handleCancelWaitlistEntry = async (id: string) => {
     setWaitlistRows((prev) => prev.map((w) => (w.id === id ? { ...w, status: 'cancelled' } : w)));
+    try {
+      await updateWaitlistStatusInSupabase(id, 'cancelled');
+    } catch {
+      // Keep optimistic state
+    }
     addToast('Waitlist entry cancelled.', 'info');
   };
 
-  const handleToggleInquiryStatus = (id: string, nextStatus: 'new' | 'reviewed') => {
+  const handleToggleInquiryStatus = async (id: string, nextStatus: 'new' | 'reviewed') => {
     setContactMessages((prev) => prev.map((m) => (m.id === id ? { ...m, status: nextStatus } : m)));
+    try {
+      await updateContactMessageStatusInSupabase(id, nextStatus);
+    } catch {
+      // Keep optimistic state
+    }
     addToast(
       nextStatus === 'reviewed'
         ? language === 'hi'
@@ -574,7 +668,7 @@ export function AdminDashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void loadAdminData()}
+                  onClick={() => void loadAdminData(true)}
                   className="min-h-[38px] inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-white border border-rose-200 rounded-lg text-rose-800 hover:bg-rose-100"
                 >
                   <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
@@ -596,6 +690,52 @@ export function AdminDashboard() {
               <>
                 {section === 'overview' && (
                   <div className="space-y-6">
+                    {/* Supabase Database Connection Status */}
+                    <div className="bg-white border border-[#E2EAF2] rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#1C7ED6] flex items-center justify-center shrink-0">
+                          <Database className="w-4 h-4" aria-hidden="true" />
+                        </div>
+                        <div className="space-y-0.5 text-xs">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-display font-bold text-sm text-[#0B2D52]">
+                              Supabase PostgreSQL
+                            </span>
+                            {dbHealth?.tablesReady ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                                <CheckCircle2 className="w-3 h-3" aria-hidden="true" />
+                                Connected &amp; Tables Active
+                              </span>
+                            ) : dbHealth?.configured ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-semibold">
+                                Connected · Run supabase/schema.sql
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                Not Configured
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[#5C6F84]">
+                            {getSupabaseProjectHost()
+                              ? `Project: ${getSupabaseProjectHost()}`
+                              : 'Configure VITE_SUPABASE_URL & VITE_SUPABASE_PUBLISHABLE_KEY'}
+                            {dbHealth && !dbHealth.tablesReady && dbHealth.missingTables.length > 0
+                              ? ` · Missing tables: ${dbHealth.missingTables.join(', ')}`
+                              : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void loadAdminData(true)}
+                        className="self-start sm:self-center min-h-[36px] inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#0B2D52] bg-[#F4F8FC] hover:bg-[#EAF3FC] border border-[#E2EAF2] rounded-xl cursor-pointer shrink-0"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                        <span>{language === 'hi' ? 'कनेक्शन जांचें' : 'Verify Sync'}</span>
+                      </button>
+                    </div>
+
                     {/* KPI Row */}
                     <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
                       {[
@@ -696,7 +836,7 @@ export function AdminDashboard() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => void loadAdminData()}
+                          onClick={() => void loadAdminData(true)}
                           className="min-h-[34px] inline-flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-[#0B2D52] bg-[#F4F8FC] hover:bg-[#EAF3FC] border border-[#E2EAF2] rounded-lg transition-colors"
                         >
                           <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />

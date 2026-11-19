@@ -16,7 +16,11 @@ import {
   X,
 } from 'lucide-react';
 import { useClinic } from '../context/ClinicContext';
-import { computeDoctorSlotsStatic, saveLocalAppointment } from '../data/clinicData';
+import { computeDoctorSlots } from '../lib/clinicCatalog';
+import {
+  createAppointmentInSupabase,
+  createWaitlistEntryInSupabase,
+} from '../lib/clinicDb';
 import { useT } from '../i18n/translations';
 import { resolveClinicImage } from '../lib/clinicImages';
 import { buildBookingWhatsAppHref } from '../lib/contactLinks';
@@ -27,6 +31,7 @@ import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import type {
   Appointment,
   AppointmentDocument,
+  AppointmentWaitlistEntry,
   NotificationChannel,
   WaitlistTimeRange,
 } from '../types/clinic';
@@ -107,7 +112,7 @@ export function BookingPage() {
   const slotsError = false;
   const slots = useMemo(() => {
     if (!selectedDoctor || !bookingDraft.date) return [];
-    return computeDoctorSlotsStatic(selectedDoctor, bookingDraft.date);
+    return computeDoctorSlots(selectedDoctor, bookingDraft.date);
   }, [selectedDoctor, bookingDraft.date]);
 
   const setStep = (step: number) => {
@@ -204,7 +209,7 @@ export function BookingPage() {
     link.remove();
   };
 
-  const handleSubmitBooking = () => {
+  const handleSubmitBooking = async () => {
     setErrorMsg('');
     if (!selectedDoctor || !bookingDraft.date || !bookingDraft.timeSlot) {
       setErrorMsg(
@@ -234,8 +239,8 @@ export function BookingPage() {
       documents: bookingDraft.documents,
       clinicNotes:
         language === 'hi'
-          ? 'व्हाट्सएप बुकिंग विवरण तैयार।'
-          : 'WhatsApp booking details generated.',
+          ? 'ऑनलाइन बुकिंग Supabase डेटाबेस और व्हाट्सएप डेस्क के लिए तैयार।'
+          : 'Online booking saved and formatted for WhatsApp desk.',
       createdByRole: user?.role || 'guest',
       createdAt: nowIso,
       updatedAt: nowIso,
@@ -259,35 +264,92 @@ export function BookingPage() {
       reason: newAppt.reason,
     });
 
-    saveLocalAppointment(newAppt);
-    setSubmittedAppt(newAppt);
-    setWhatsappUrl(waUrl);
-    setSuccessPopupOpen(true);
-    setStep(8);
-    setSubmitting(false);
+    try {
+      const result = await createAppointmentInSupabase(newAppt);
+      setSubmittedAppt(result.data);
+      setWhatsappUrl(waUrl);
+      setSuccessPopupOpen(true);
+      setStep(8);
 
-    addToast(
-      language === 'hi'
-        ? 'अपॉइंटमेंट सफलतापूर्वक तैयार! व्हाट्सएप खुल रहा है...'
-        : 'Booking confirmed! Opening WhatsApp with your booking details.',
-      'success'
-    );
+      if (result.persistedInSupabase) {
+        addToast(
+          language === 'hi'
+            ? 'अपॉइंटमेंट Supabase में सहेजा गया! व्हाट्सएप खुल रहा है...'
+            : 'Booking saved to database & confirmed! Opening WhatsApp...',
+          'success'
+        );
+      } else if (result.schemaMissing) {
+        addToast(
+          language === 'hi'
+            ? 'बुकिंग तैयार है। कृपया Supabase SQL Editor में supabase/schema.sql चलाएँ।'
+            : 'Booking prepared locally. Run supabase/schema.sql in Supabase SQL Editor to enable cloud table storage.',
+          'info'
+        );
+      } else {
+        addToast(
+          language === 'hi'
+            ? 'अपॉइंटमेंट सफलतापूर्वक तैयार! व्हाट्सएप खुल रहा है...'
+            : 'Booking confirmed! Opening WhatsApp with your booking details.',
+          'success'
+        );
+      }
 
-    openWhatsAppTab(waUrl);
+      openWhatsAppTab(waUrl);
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error && err.message
+          ? err.message
+          : language === 'hi'
+            ? 'अपॉइंटमेंट सहेजने में त्रुटि हुई। कृपया पुनः प्रयास करें।'
+            : 'Unable to save booking. Please try again.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleJoinWaitlist = (e: React.FormEvent) => {
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bookingDraft.doctorId || !bookingDraft.date) return;
     setErrorMsg('');
-    setWaitlistDoneId(`wait-${Date.now()}`);
-    setWaitlistOpen(false);
-    addToast(
-      language === 'hi'
-        ? 'आपको अपॉइंटमेंट प्रतीक्षा सूची में जोड़ दिया गया है।'
-        : 'Added to appointment waitlist (demo).',
-      'success'
-    );
+    const nowIso = new Date().toISOString();
+    const entry: AppointmentWaitlistEntry = {
+      id: `wait-${Date.now()}`,
+      patientId: user?.id || 'guest',
+      patientName: bookingDraft.patientName || user?.name || 'Patient',
+      patientEmail: bookingDraft.patientEmail || user?.email || '',
+      patientPhone: bookingDraft.patientPhone || user?.phone || '',
+      doctorId: bookingDraft.doctorId,
+      specializationId: bookingDraft.specializationId || selectedDoctor?.specializationId || '',
+      preferredDate: bookingDraft.date,
+      preferredEndDate: waitlistEndDate || undefined,
+      preferredTimeRange: waitlistTimeRange,
+      notificationPreference: waitlistChannel,
+      consentToNotify: waitlistConsent,
+      status: 'active',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    try {
+      const res = await createWaitlistEntryInSupabase(entry);
+      setWaitlistDoneId(res.data.id);
+      setWaitlistOpen(false);
+      addToast(
+        language === 'hi'
+          ? 'आपको अपॉइंटमेंट प्रतीक्षा सूची में जोड़ दिया गया है।'
+          : res.persistedInSupabase
+            ? 'Waitlist request saved to Supabase database.'
+            : 'Added to appointment waitlist.',
+        'success'
+      );
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to submit waitlist request.'
+      );
+    }
   };
 
   const activeStep = submittedAppt ? 8 : bookingDraft.step;

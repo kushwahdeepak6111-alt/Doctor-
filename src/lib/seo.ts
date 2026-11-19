@@ -1,4 +1,4 @@
-import { CLINIC_FAQ_ITEMS } from '../data/faqItems';
+import { CLINIC_FAQ_ITEMS } from './clinicCatalog';
 import type {
   ClinicSettings,
   Doctor,
